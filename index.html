@@ -4,21 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>سیستم پیش‌انتخاب واحد دانشگاهی</title>
-    
+
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
     <!-- Libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    
+
     <!-- Styles -->
     <link rel="stylesheet" href="style.css">
 </head>
 <body class="dark-mode">
-    
+
     <!-- ==================== HEADER ==================== -->
     <header class="app-header">
         <div class="header-content">
@@ -33,8 +33,14 @@
                 </div>
                 <h1 class="app-title">پیش‌انتخاب واحد</h1>
             </div>
-            
+
             <div class="header-actions">
+                <div class="data-update" id="dataUpdate" title="آخرین به‌روزرسانی دیتای دروس">
+                    <span class="update-dot"></span>
+                    <span class="data-update-label">آخرین به‌روزرسانی دیتا:</span>
+                    <span class="data-update-value" id="lastUpdateValue">—</span>
+                </div>
+
                 <button class="theme-toggle" id="themeToggle" aria-label="تغییر تم">
                     <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="5"></circle>
@@ -57,19 +63,29 @@
 
     <!-- ==================== MAIN CONTENT ==================== -->
     <main class="main-container">
-        
-        <!-- ===== SEARCH SECTION ===== -->
-        <section class="search-section">
+
+        <!-- ===== CUSTOM DATA ACTIVE BANNER ===== -->
+        <div class="custom-data-banner hidden" id="customDataBanner">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                <line x1="12" y1="9" x2="12" y2="13"></line>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+            <span>به دلیل ورود دیتا دستی، از دیتای اصلی سایت نمی‌توانید استفاده کنید</span>
+        </div>
+
+        <!-- ===== MOBILE SEARCH (hidden on desktop) ===== -->
+        <section class="search-section" id="searchSection">
             <div class="search-container">
                 <div class="search-input-wrapper">
                     <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="11" cy="11" r="8"></circle>
                         <path d="m21 21-4.35-4.35"></path>
                     </svg>
-                    <input 
-                        type="text" 
-                        id="searchInput" 
-                        class="search-input" 
+                    <input
+                        type="text"
+                        id="searchInput"
+                        class="search-input"
                         placeholder="جستجوی درس یا استاد..."
                         autocomplete="off"
                     >
@@ -80,7 +96,7 @@
                         </svg>
                     </button>
                 </div>
-                
+
                 <!-- Search Results Dropdown -->
                 <div class="search-results" id="searchResults">
                     <div class="results-header">
@@ -89,22 +105,25 @@
                     <div class="results-list" id="resultsList"></div>
                 </div>
             </div>
-            
-            <!-- Selected Courses Summary -->
+        </section>
+
+        <!-- ===== SUMMARY + CONTROLS ===== -->
+        <section class="summary-controls">
             <div class="selection-summary">
                 <div class="summary-item">
                     <span class="summary-label">درس انتخاب شده:</span>
-                    <span class="summary-value" id="selectedCount">0</span>
+                    <span class="summary-value" id="selectedCount">۰</span>
                 </div>
                 <div class="summary-item">
                     <span class="summary-label">جمع واحد:</span>
-                    <span class="summary-value" id="totalUnits">0</span>
+                    <span class="summary-value" id="totalUnits">۰</span>
+                </div>
+                <div class="summary-item summary-limit">
+                    <span class="summary-label">حد مجاز:</span>
+                    <span class="summary-value" id="limitUnits">۲۰</span>
                 </div>
             </div>
-        </section>
 
-        <!-- ===== CONTROLS SECTION ===== -->
-        <section class="controls-section">
             <div class="controls-wrapper">
                 <button class="control-btn primary" id="btnViewList">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -117,26 +136,34 @@
                     </svg>
                     <span>لیست دروس</span>
                 </button>
-                
-                <button class="control-btn secondary" id="btnCopyTable">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                    </svg>
-                    <span>کپی جدول</span>
-                </button>
-                
+
                 <button class="control-btn secondary" id="btnExportPDF">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                         <polyline points="14 2 14 8 20 8"></polyline>
                         <line x1="16" y1="13" x2="8" y2="13"></line>
                         <line x1="16" y1="17" x2="8" y2="17"></line>
-                        <polyline points="10 9 9 9 8 9"></polyline>
                     </svg>
                     <span>خروجی PDF</span>
                 </button>
-                
+
+                <button class="control-btn secondary" id="btnCopyTable">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                    <span>کپی برنامه</span>
+                </button>
+
+                <button class="control-btn secondary" id="btnCustomData">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    <span>دیتای دلخواه</span>
+                </button>
+
                 <button class="control-btn danger" id="btnReset">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="3 6 5 6 21 6"></polyline>
@@ -147,41 +174,80 @@
             </div>
         </section>
 
-        <!-- ===== SCHEDULE TABLE SECTION ===== -->
-        <section class="schedule-section">
-            <div class="schedule-container" id="scheduleContainer">
-                <div class="schedule-header">
-                    <h2 class="schedule-title">جدول زمان‌بندی</h2>
+        <!-- ===== WORKSPACE: PANEL (DESKTOP) + SCHEDULE ===== -->
+        <div class="workspace">
+
+            <!-- Desktop side panel -->
+            <aside class="courses-panel" id="coursesPanel">
+                <div class="panel-header">
+                    <h3 class="panel-title">دروس ارائه‌شده</h3>
+                    <span class="panel-count" id="panelCount">۰</span>
                 </div>
-                
-                <div class="table-wrapper">
-                    <table class="schedule-table" id="scheduleTable">
-                        <thead>
-                            <tr class="time-header">
-                                <th class="day-header">روز / ساعت</th>
-                                <th>07:00</th>
-                                <th>08:00</th>
-                                <th>09:00</th>
-                                <th>10:00</th>
-                                <th>11:00</th>
-                                <th>12:00</th>
-                                <th>13:00</th>
-                                <th>14:00</th>
-                                <th>15:00</th>
-                                <th>16:00</th>
-                                <th>17:00</th>
-                                <th>18:00</th>
-                                <th>19:00</th>
-                                <th>20:00</th>
-                            </tr>
-                        </thead>
-                        <tbody id="scheduleBody">
-                            <!-- Rows will be generated by JS -->
-                        </tbody>
-                    </table>
+
+                <div class="panel-search">
+                    <svg class="panel-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="m21 21-4.35-4.35"></path>
+                    </svg>
+                    <input type="text" id="panelSearch" class="panel-search-input" placeholder="جستجو..." autocomplete="off">
+                    <button class="panel-search-clear" id="panelSearchClear" aria-label="پاک کردن">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
                 </div>
-            </div>
-        </section>
+
+                <div class="panel-list" id="panelList">
+                    <!-- Filled by JS -->
+                </div>
+            </aside>
+
+            <!-- Schedule -->
+            <section class="schedule-section">
+                <div class="schedule-container" id="scheduleContainer">
+                    <div class="schedule-header">
+                        <h2 class="schedule-title">جدول زمان‌بندی</h2>
+                        <div class="units-flag" id="unitsFlag">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                                <line x1="12" y1="9" x2="12" y2="13"></line>
+                                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                            </svg>
+                            <span id="unitsFlagText">جمع واحدها از ۲۰ واحد مجاز بیشتر شده است!</span>
+                        </div>
+                    </div>
+
+                    <div class="table-wrapper">
+                        <table class="schedule-table" id="scheduleTable">
+                            <thead>
+                                <tr class="time-header">
+                                    <th class="day-header">روز / ساعت</th>
+                                    <th>07:00</th>
+                                    <th>08:00</th>
+                                    <th>09:00</th>
+                                    <th>10:00</th>
+                                    <th>11:00</th>
+                                    <th>12:00</th>
+                                    <th>13:00</th>
+                                    <th>14:00</th>
+                                    <th>15:00</th>
+                                    <th>16:00</th>
+                                    <th>17:00</th>
+                                    <th>18:00</th>
+                                    <th>19:00</th>
+                                    <th>20:00</th>
+                                </tr>
+                            </thead>
+                            <tbody id="scheduleBody">
+                                <!-- Rows will be generated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+        </div>
 
     </main>
 
@@ -194,7 +260,7 @@
     </footer>
 
     <!-- ==================== MODALS ==================== -->
-    
+
     <!-- Course Info Modal -->
     <div class="modal-overlay" id="courseModal">
         <div class="modal-content">
@@ -236,6 +302,33 @@
             </div>
             <div class="modal-footer">
                 <button class="btn-secondary" id="btnCloseListModal">بستن</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Data Modal -->
+    <div class="modal-overlay" id="customDataModal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3 class="modal-title">ورود دیتای دلخواه</h3>
+                <button class="modal-close" id="closeCustomDataModal">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p class="custom-data-hint">
+                    کد HTML جدول دروس (مشابه خروجی سایت آموزش / فایل <span class="code-hint">example.txt</span>) را در کادر زیر قرار دهید.
+                    پس از بارگذاری، لیست دروس از دیتای جدید ساخته می‌شود و دیتای پیش‌فرض غیرفعال خواهد شد.
+                </p>
+                <textarea id="customDataInput" class="custom-data-textarea" dir="ltr" spellcheck="false" placeholder="&lt;table&gt;...&lt;/table&gt;"></textarea>
+                <div class="custom-data-status" id="customDataStatus"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="btnRestoreDefault">بازگشت به دیتای پیش‌فرض</button>
+                <button class="btn-primary" id="btnLoadCustomData">بارگذاری دیتا</button>
             </div>
         </div>
     </div>
