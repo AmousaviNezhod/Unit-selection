@@ -1,0 +1,13 @@
+# Claude Code local settings
+.claude/
+
+# OS junk
+Thumbs.db
+.DS_Store
+Desktop.ini
+
+# Logs
+*.log
+
+# Editor backups
+*~
