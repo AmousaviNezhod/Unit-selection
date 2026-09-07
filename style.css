@@ -1758,6 +1758,61 @@ body.modal-open {
     border-radius: 3px;
 }
 
+/* ── Week parity (زوج/فرد) ──────────────────────────────────────
+   Biweekly courses carry a parity badge; opposite-parity courses sharing
+   the same hour render side-by-side (each takes half the cell width). */
+.course-block-parity {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    font-size: 8px;
+    font-weight: var(--font-bold);
+    color: #0a0a0a;
+    background-color: rgba(255, 255, 255, 0.85);
+    padding: 1px 4px;
+    border-radius: 3px;
+    line-height: 1.4;
+}
+
+.course-block.parity-even {
+    border: 1px dashed rgba(255, 255, 255, 0.75);
+}
+
+.course-block.parity-odd {
+    border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+/* Shared hour: even weeks take the right half (RTL first), odd the left —
+   geometry (right/width) is computed in JS from the slot's real duration */
+.course-block.parity-half {
+    padding: 2px;
+    gap: 1px;
+}
+
+.course-block.parity-half .course-block-name {
+    font-size: 9px;
+    white-space: normal;
+    line-height: 1.25;
+}
+
+.course-block.parity-half .course-block-parity {
+    position: static;
+    order: -1;
+}
+
+/* Parity badge inline inside the day/time context (tags, modal, list) */
+.parity-inline {
+    display: inline-block;
+    margin-right: 4px;
+    padding: 0 6px;
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-semibold);
+    color: var(--text-primary);
+    background-color: rgba(255, 255, 255, 0.12);
+    border: 1px solid var(--border-primary);
+    border-radius: 3px;
+}
+
 /* "Other courses" row (no fixed class time) */
 .notime-row th {
     background-color: var(--bg-elevated);

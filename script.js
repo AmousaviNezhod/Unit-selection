@@ -307,11 +307,27 @@ function hasTimeOverlap(start1, end1, start2, end2) {
     return s1 < e2 && s2 < e1;
 }
 
+/**
+ * Two overlapping sessions conflict only when they occupy the SAME week
+ * parity. A weekly session occupies both parities; a biweekly one occupies
+ * just its own (زوج/فرد) — so "مباحث ویژه (زوج)" and "چندرسانه‌ای (فرد)"
+ * can share شنبه 14-16 without clashing.
+ */
+function slotsConflict(slot1, slot2) {
+    if (slot1.day !== slot2.day) return false;
+    if (!hasTimeOverlap(slot1.start, slot1.end, slot2.start, slot2.end)) return false;
+    const p1 = slot1.cadence === 'biweekly' ? (slot1.parity || 'both') : 'both';
+    const p2 = slot2.cadence === 'biweekly' ? (slot2.parity || 'both') : 'both';
+    // 'both' overlaps everything; even+odd never meet
+    if (p1 === 'both' || p2 === 'both') return true;
+    return p1 === p2;
+}
+
 /** Check if two courses have schedule conflicts */
 function checkConflict(course1, course2) {
     for (const slot1 of course1.schedule) {
         for (const slot2 of course2.schedule) {
-            if (slot1.day === slot2.day && hasTimeOverlap(slot1.start, slot1.end, slot2.start, slot2.end)) {
+            if (slotsConflict(slot1, slot2)) {
                 return {
                     hasConflict: true,
                     day: slot1.day,
@@ -322,6 +338,14 @@ function checkConflict(course1, course2) {
         }
     }
     return { hasConflict: false };
+}
+
+/** Persian label for a slot's week parity (زوج/فرد) — null when none */
+function slotParityLabel(slot) {
+    if (!slot || slot.cadence !== 'biweekly') return null;
+    if (slot.parity === 'even') return 'زوج';
+    if (slot.parity === 'odd') return 'فرد';
+    return null;
 }
 
 /** Unique course ID: code-group */
@@ -397,7 +421,16 @@ function parseSessionChunk(chunk) {
     }
 
     if (startMin == null || endMin == null || endMin <= startMin) return null;
-    return { day: normalizeDay(dayMatch[0]), start: minutesToTime(startMin), end: minutesToTime(endMin) };
+
+    // Portal marks biweekly sessions inside the chunk:
+    //   "(هفته در میان به مدت 120 دقیقه در کلاس 0) شروع زوج" — even weeks
+    //   "(هفته در میان به مدت 120 دقیقه در کلاس 0) شروع فرد" — odd weeks
+    const cadence = /هفته\s*در\s*میان/.test(chunk) ? 'biweekly' : 'weekly';
+    const parity = /شروع\s*زوج\s*و\s*فرد/.test(chunk) ? 'both'
+        : /شروع\s*زوج/.test(chunk) ? 'even'
+        : /شروع\s*فرد/.test(chunk) ? 'odd' : null;
+
+    return { day: normalizeDay(dayMatch[0]), start: minutesToTime(startMin), end: minutesToTime(endMin), cadence, parity };
 }
 
 /**
@@ -406,6 +439,8 @@ function parseSessionChunk(chunk) {
  *   "<b>جلسه اول روز:</b> شنبه ساعت 12(هر هفته به مدت 180 دقیقه در کلاس 0)"
  * Handles جلسه اول / دوم / سوم ... individually.
  * "ساعت 6 (به مدت 0 دقیقه)" => no fixed class time (project/internship)
+ * Biweekly sessions carry "هفته در میان" + "شروع زوج/فرد" — kept on the slot
+ * as cadence/parity so two opposite-parity courses may share the same hour.
  */
 function parseScheduleFromInfo(title) {
     if (!title) return [];
@@ -1090,9 +1125,11 @@ function scheduleTagsHtml(course) {
     if (!course.schedule.length) {
         return '<span class="schedule-tag muted">بدون زمان‌بندی مشخص</span>';
     }
-    return course.schedule.map(s =>
-        `<span class="schedule-tag">${escapeHtml(s.day)} ${toPersianTime(s.start)}-${toPersianTime(s.end)}</span>`
-    ).join('');
+    return course.schedule.map(s => {
+        const parity = slotParityLabel(s);
+        // Parity rides INSIDE the day/time tag — never a detached label
+        return `<span class="schedule-tag">${escapeHtml(s.day)} ${toPersianTime(s.start)}-${toPersianTime(s.end)}${parity ? ` <b class="parity-inline">${parity}</b>` : ''}</span>`;
+    }).join('');
 }
 
 /** Build a course card (shared by panel + mobile search) */
@@ -1455,10 +1492,13 @@ function renderNotimeChips() {
 /** Shared factory: block element with content + click handler (no positioning) */
 function createCourseBlock(course, slot, extraClass) {
     const block = document.createElement('div');
+    const parity = slotParityLabel(slot);
     block.className = extraClass ? `course-block ${extraClass}` : 'course-block';
+    if (parity) block.classList.add(`parity-${slot.parity}`);
     block.style.backgroundColor = course.color;
     block.dataset.courseId = getCourseId(course);
     block.innerHTML = `
+        ${parity ? `<span class="course-block-parity">${parity}</span>` : ''}
         <span class="course-block-name">${escapeHtml(course.name)}</span>
         <span class="course-block-time">${toPersianTime(slot.start)}-${toPersianTime(slot.end)}</span>
         <span class="course-block-group">گروه ${toPersianNumber(course.group)}</span>
@@ -1500,9 +1540,40 @@ function renderCourseBlock(course, slot, targetCell, spanRows = 1) {
     // RTL: time flows right-to-left — anchor to the RIGHT edge of the cell
     // and stretch leftwards across the covered hours
     const offsetPercent = ((startTime - startHour) / 1) * 100;
-    block.style.right = `${offsetPercent}%`;
-    block.style.width = `${duration * 100}%`;
+
+    // Parity sharing: a زوج/فرد block only shrinks to half width when an
+    // opposite-parity block occupies the SAME slot — a lone one stays full.
+    // hasOppositeParityBlock reads state (not DOM), so render order is safe.
+    if (hasOppositeParityBlock(slot)) {
+        const half = duration * 50;
+        if (slot.parity === 'even') {
+            // Even weeks (زوج): right half — anchored at the slot's right edge
+            block.style.right = `${offsetPercent}%`;
+            block.style.width = `${half}%`;
+        } else {
+            // Odd weeks (فرد): left half — push past the even block's half
+            block.style.right = `${offsetPercent + half}%`;
+            block.style.width = `${half}%`;
+        }
+        block.classList.add('parity-half');
+    } else {
+        block.style.right = `${offsetPercent}%`;
+        block.style.width = `${duration * 100}%`;
+    }
     startCell.appendChild(block);
+}
+
+/** Does an opposite-parity (زوج/فرد) block already occupy this exact slot? */
+function hasOppositeParityBlock(slot) {
+    if (slotParityLabel(slot) === null) return false;
+    const opposite = slot.parity === 'even' ? 'odd' : 'even';
+    return state.selectedCourses.some(id => {
+        const other = findCourseById(id);
+        if (!other) return false;
+        return other.schedule.some(s2 =>
+            s2.day === slot.day && s2.start === slot.start && s2.end === slot.end &&
+            s2.cadence === 'biweekly' && s2.parity === opposite);
+    });
 }
 
 // ── Transposed fit-mode grid ────────────────────────────────────
@@ -1632,11 +1703,14 @@ function showCourseModal(course) {
     state.currentModalCourse = course;
 
     const scheduleHtml = course.schedule.length
-        ? course.schedule.map(s => `
+        ? course.schedule.map(s => {
+            const parity = slotParityLabel(s);
+            return `
             <div class="schedule-item">
                 <span class="schedule-item-day">${escapeHtml(s.day)}</span>
-                <span class="schedule-item-time">${toPersianTime(s.start)} - ${toPersianTime(s.end)}</span>
-            </div>`).join('')
+                <span class="schedule-item-time">${toPersianTime(s.start)} - ${toPersianTime(s.end)}${parity ? ` <span class="parity-inline">${parity}</span>` : ''}</span>
+            </div>`;
+        }).join('')
         : '<div class="schedule-item"><span class="schedule-item-day">بدون زمان‌بندی مشخص</span></div>';
 
     elements.courseModalBody.innerHTML = `
@@ -1708,7 +1782,10 @@ function renderSelectedList() {
         if (!course) return '';
 
         const scheduleText = course.schedule.length
-            ? course.schedule.map(s => `${escapeHtml(s.day)} ${toPersianTime(s.start)}-${toPersianTime(s.end)}`).join('، ')
+            ? course.schedule.map(s => {
+                const parity = slotParityLabel(s);
+                return `${escapeHtml(s.day)} ${toPersianTime(s.start)}-${toPersianTime(s.end)}${parity ? ` (${parity})` : ''}`;
+            }).join('، ')
             : 'بدون زمان‌بندی مشخص';
 
         const capacityFull = !isCapacityAvailable(course);
