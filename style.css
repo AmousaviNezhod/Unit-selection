@@ -737,6 +737,16 @@ body.modal-open {
     gap: var(--space-1);
 }
 
+/* Capacity readout on course cards: green while seats remain, red when full */
+.course-result-meta .capacity-ok {
+    color: #4ade80;
+}
+
+.course-result-meta .capacity-full {
+    color: var(--danger);
+    font-weight: var(--font-semibold);
+}
+
 .course-result-schedule {
     display: flex;
     flex-wrap: wrap;

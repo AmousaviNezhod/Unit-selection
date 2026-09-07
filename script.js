@@ -1047,6 +1047,9 @@ function courseCardHtml(course) {
                 <span>استاد: ${escapeHtml(course.professor)}</span>
                 <span>${formatUnits(course.units)} واحد</span>
                 <span>گروه ${toPersianNumber(course.group)}</span>
+                ${course.capacity > 0
+                    ? `<span class="${capacityFull ? 'capacity-full' : 'capacity-ok'}">ظرفیت: ${toPersianNumber(course.registered)} از ${toPersianNumber(course.capacity)}</span>`
+                    : '<span>ظرفیت: نامشخص</span>'}
             </div>
             <div class="course-result-schedule">${scheduleTagsHtml(course)}</div>
             ${btn}
