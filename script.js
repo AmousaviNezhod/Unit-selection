@@ -140,6 +140,14 @@ const elements = {
     btnFitTable: document.getElementById('btnFitTable'),
     btnBannerRestoreDefault: document.getElementById('btnBannerRestoreDefault'),
 
+    // Mobile bottom action bar (phone-only mirror of the controls above)
+    btnViewListM: document.getElementById('btnViewListM'),
+    btnCopyTableM: document.getElementById('btnCopyTableM'),
+    btnExportPDFM: document.getElementById('btnExportPDFM'),
+    btnCustomDataM: document.getElementById('btnCustomDataM'),
+    btnResetM: document.getElementById('btnResetM'),
+    btnFitTableM: document.getElementById('btnFitTableM'),
+
     // Schedule
     scheduleBody: document.getElementById('scheduleBody'),
     scheduleTable: document.getElementById('scheduleTable'),
@@ -172,6 +180,13 @@ const elements = {
     closeCustomDataModal: document.getElementById('closeCustomDataModal'),
     btnLoadCustomData: document.getElementById('btnLoadCustomData'),
     btnRestoreDefault: document.getElementById('btnRestoreDefault'),
+    tabDataImport: document.getElementById('tabDataImport'),
+    tabDataGuide: document.getElementById('tabDataGuide'),
+    paneDataImport: document.getElementById('paneDataImport'),
+    paneDataGuide: document.getElementById('paneDataGuide'),
+    btnGuideVideo: document.getElementById('btnGuideVideo'),
+    guideVideoWrap: document.getElementById('guideVideoWrap'),
+    guideVideoFrame: document.getElementById('guideVideoFrame'),
 
     // Advanced filters (rendered into mobile bar + desktop drawer)
     filterBarMobile: document.getElementById('filterBarMobile'),
@@ -193,6 +208,13 @@ const elements = {
     conflictMessage: document.getElementById('conflictMessage'),
     closeConflictModal: document.getElementById('closeConflictModal'),
     btnCloseConflictModal: document.getElementById('btnCloseConflictModal'),
+
+    // Data-freshness notice (page-load modal)
+    freshnessModal: document.getElementById('freshnessModal'),
+    closeFreshnessModal: document.getElementById('closeFreshnessModal'),
+    btnCloseFreshness: document.getElementById('btnCloseFreshness'),
+    btnOpenCustomDataFreshness: document.getElementById('btnOpenCustomDataFreshness'),
+    freshnessLastUpdate: document.getElementById('freshnessLastUpdate'),
 
     // Toast
     toastContainer: document.getElementById('toastContainer')
@@ -1219,13 +1241,9 @@ function initializeScheduleTable() {
 }
 
 function renderSchedule() {
-    // Phone-sized viewports use the transposed grid (hours as rows) so the
-    // table stays narrow and readable — same orientation as fit-mode
-    if (isMobileViewport() && !isFitMode()) {
-        renderTransposedSchedule();
-        return;
-    }
-
+    // Normal grid on every viewport: day rows / hour columns. On phones the
+    // wrapper scrolls horizontally so blocks keep their real hour positions;
+    // the fullscreen fit button swaps to the compressed transposed grid.
     const hours = getScheduleHours();
     if (JSON.stringify(hours) !== JSON.stringify(state.currentHours) ||
         state.currentTransposed) {
@@ -1328,57 +1346,61 @@ function renderNotimeChips() {
     cell.closest('tr').style.display = cell.children.length ? '' : 'none';
 }
 
-function renderCourseBlock(course, slot) {
+/** Shared factory: block element with content + click handler (no positioning) */
+function createCourseBlock(course, slot, extraClass) {
+    const block = document.createElement('div');
+    block.className = extraClass ? `course-block ${extraClass}` : 'course-block';
+    block.style.backgroundColor = course.color;
+    block.dataset.courseId = getCourseId(course);
+    block.innerHTML = `
+        <span class="course-block-name">${escapeHtml(course.name)}</span>
+        <span class="course-block-time">${toPersianTime(slot.start)}-${toPersianTime(slot.end)}</span>
+        <span class="course-block-group">گروه ${toPersianNumber(course.group)}</span>
+    `;
+    block.addEventListener('click', () => showCourseModal(course));
+    return block;
+}
+
+function renderCourseBlock(course, slot, targetCell, spanRows = 1) {
     const startTime = parseTime(slot.start);
     const endTime = parseTime(slot.end);
     const startHour = Math.floor(startTime);
     const duration = endTime - startTime;
     if (duration <= 0) return;
 
-    // Normal grid: day rows / hour columns. Transposed (fit-mode) grid:
-    // hour rows / day columns — the selectors mirror the grid orientation
-    const startCell = state.currentTransposed
-        ? elements.scheduleBody.querySelector(
-            `tr[data-hour="${startHour}"] td[data-day="${slot.day}"]`)
-        : elements.scheduleBody.querySelector(
-            `tr[data-day="${slot.day}"] td[data-hour="${startHour}"]`);
-    if (!startCell) return;
-
-    const block = document.createElement('div');
-    block.className = 'course-block';
-    block.style.backgroundColor = course.color;
-    block.dataset.courseId = getCourseId(course);
-
     if (state.currentTransposed) {
-        // Transposed grid: days are columns, hours are rows — the block must
-        // span ROWS vertically (one row per hour) instead of columns sideways
-        const ROW_H = 46; // 44px cell height + 2px border-spacing (matches CSS)
-        const yPos = (t) => Math.floor(t) * ROW_H + (t % 1) * (ROW_H - 2);
-        block.style.left = '0';
-        block.style.right = '0';
-        block.style.width = 'auto';
-        block.style.top = `${3 + (yPos(startTime) - startHour * ROW_H)}px`;
-        block.style.height = `${yPos(endTime) - yPos(startTime) - 6}px`;
-    } else {
-        // Normal grid: RTL, time flows right-to-left — anchor to the RIGHT
-        // edge of the cell and stretch leftwards across the covered hours
-        const offsetPercent = ((startTime - startHour) / 1) * 100;
-        block.style.right = `${offsetPercent}%`;
-        block.style.width = `${duration * 100}%`;
+        // Transposed grid (fit-mode fullscreen): the block lives in its
+        // START-hour cell. Multi-hour slots stretch DOWNWARD across the
+        // covered rows (8-10 fills rows 8 AND 9) — final height is measured
+        // from real cell geometry in the post-pass below, so wrapped titles
+        // and row heights never break the span.
+        const block = createCourseBlock(course, slot, 'course-block-flow');
+        if (spanRows > 1) {
+            block.dataset.spanRows = spanRows;
+            block.dataset.spanEndHour = startHour + spanRows - 1;
+            block.dataset.spanDay = slot.day;
+            targetCell.style.position = 'relative';
+        }
+        targetCell.appendChild(block);
+        return;
     }
 
-    block.innerHTML = `
-        <span class="course-block-name">${escapeHtml(course.name)}</span>
-        <span class="course-block-time">${toPersianTime(slot.start)}-${toPersianTime(slot.end)}</span>
-        <span class="course-block-group">گروه ${toPersianNumber(course.group)}</span>
-    `;
+    // Normal grid: day rows / hour columns
+    const startCell = elements.scheduleBody.querySelector(
+        `tr[data-day="${slot.day}"] td[data-hour="${startHour}"]`);
+    if (!startCell) return;
 
-    block.addEventListener('click', () => showCourseModal(course));
+    const block = createCourseBlock(course, slot);
+    // RTL: time flows right-to-left — anchor to the RIGHT edge of the cell
+    // and stretch leftwards across the covered hours
+    const offsetPercent = ((startTime - startHour) / 1) * 100;
+    block.style.right = `${offsetPercent}%`;
+    block.style.width = `${duration * 100}%`;
     startCell.appendChild(block);
 }
 
 // ── Transposed fit-mode grid ────────────────────────────────────
-// Mobile fullscreen: hours as rows, days as columns. The table becomes
+// Fullscreen (fit button): hours as rows, days as columns. The table becomes
 // tall and narrow so it fits the phone width without horizontal scroll.
 // Empty hour rows collapse to a slim strip; empty day columns stay narrow.
 
@@ -1441,17 +1463,56 @@ function renderTransposedSchedule() {
     }
 
     elements.scheduleBody.querySelectorAll('.course-block').forEach(el => el.remove());
+    elements.scheduleBody.querySelectorAll('td.span-covered').forEach(el => el.classList.remove('span-covered'));
 
     state.selectedCourses.forEach(courseId => {
         const course = findCourseById(courseId);
         if (!course) return;
-        course.schedule.forEach(slot => renderCourseBlock(course, slot));
+        course.schedule.forEach(slot => {
+            // Transposed: the block lives in its START-hour row and stretches
+            // DOWNWARD across every row its duration covers (8-10 spans rows
+            // 8 and 9), mirroring the horizontal span of the normal grid
+            const startHour = Math.floor(parseTime(slot.start));
+            const endHour = Math.ceil(parseTime(slot.end));
+            const cell = elements.scheduleBody.querySelector(
+                `tr[data-hour="${startHour}"] td[data-day="${slot.day}"]`);
+            if (cell) {
+                const span = Math.max(1, endHour - startHour);
+                renderCourseBlock(course, slot, cell, span);
+            }
+        });
     });
 
-    // Collapse hour rows that have no course block in any day cell
+    // Mark rows a multi-hour block flows over, then collapse truly empty rows
+    elements.scheduleBody.querySelectorAll('.course-block[data-span-rows]').forEach(block => {
+        const endHour = block.dataset.spanEndHour;
+        const day = block.dataset.spanDay;
+        const lastCell = elements.scheduleBody.querySelector(
+            `tr[data-hour="${endHour}"] td[data-day="${day}"]`);
+        if (lastCell) lastCell.classList.add('span-covered');
+    });
+
+    // Collapse hour rows that have no course block in any day cell — rows a
+    // multi-hour block flows over count as occupied
     elements.scheduleBody.querySelectorAll('tr.hour-row').forEach(row => {
         const hasBlock = [...row.querySelectorAll('td')].some(td => td.children.length);
-        row.classList.toggle('empty-row', !hasBlock);
+        const covered = row.querySelector('td.span-covered') !== null;
+        row.classList.toggle('empty-row', !hasBlock && !covered);
+    });
+
+    // Post-pass: size each multi-hour block to the real geometric span between
+    // its start cell and the bottom of the last covered row (handles wrapped
+    // titles and variable row heights)
+    elements.scheduleBody.querySelectorAll('.course-block[data-span-rows]').forEach(block => {
+        const endHour = block.dataset.spanEndHour;
+        const day = block.dataset.spanDay;
+        const lastCell = elements.scheduleBody.querySelector(
+            `tr[data-hour="${endHour}"] td[data-day="${day}"]`);
+        if (!lastCell) return;
+        const cell = block.parentElement;
+        const top = cell.getBoundingClientRect().top;
+        const bottom = lastCell.getBoundingClientRect().bottom;
+        block.style.height = `${Math.max(44, Math.round(bottom - top) - 4)}px`;
     });
 
     renderNotimeChips();
@@ -1860,38 +1921,48 @@ function setupEventListeners() {
     elements.btnExportPDF.addEventListener('click', exportPDF);
     elements.btnReset.addEventListener('click', resetSchedule);
 
+    // Mobile bottom action bar — same actions as the controls above
+    elements.btnViewListM.addEventListener('click', () => {
+        renderSelectedList();
+        elements.listModal.classList.add('active');
+    });
+    elements.btnCopyTableM.addEventListener('click', copyToClipboard);
+    elements.btnExportPDFM.addEventListener('click', exportPDF);
+    elements.btnResetM.addEventListener('click', resetSchedule);
+    elements.btnCustomDataM.addEventListener('click', () => {
+        updateCustomDataStatus();
+        elements.customDataModal.classList.add('active');
+    });
+
     // Fit-whole-table toggle (mobile screenshot helper): schedule container
-    // goes fullscreen with a transposed grid (hours as rows) that fits width
+    // goes fullscreen with a transposed grid (hours as rows) that fits width.
+    // Triggered from the schedule header button AND the bottom bar's button.
     const exitFitMode = () => {
         if (!elements.scheduleContainer.classList.contains('fit-mode')) return;
         elements.scheduleContainer.classList.remove('fit-mode');
-        elements.btnFitTable.classList.remove('active');
-        elements.btnFitTable.setAttribute('aria-pressed', 'false');
+        [elements.btnFitTable, elements.btnFitTableM].forEach(btn => {
+            btn.classList.remove('active');
+            btn.setAttribute('aria-pressed', 'false');
+        });
         document.body.style.overflow = '';
         window.removeEventListener('resize', fitOnResize);
-        renderSchedule(); // mobile: keeps transposed grid; desktop: day rows
+        renderSchedule(); // back to the normal day-rows / hour-columns grid
     };
 
     const applyFitScale = () => {
-        // Transposed grid is narrow (8 columns) — usually no scale needed;
-        // still scale down on ultra-narrow screens so nothing is cut off
-        const table = elements.scheduleContainer.querySelector('.schedule-table');
-        const natural = table ? table.offsetWidth : 0;
-        if (!natural || window.innerWidth < 40) return;
-        const scale = Math.max(0.25, Math.min(1, (window.innerWidth - 8) / natural));
-        if (scale < 1) {
-            elements.scheduleContainer.style.setProperty('--fit-scale', String(scale));
-        } else {
-            elements.scheduleContainer.style.removeProperty('--fit-scale');
-        }
+        // Transposed grid columns grow only as wide as their content needs,
+        // so the table already fits the viewport — no transform squeezing.
+        elements.scheduleContainer.style.removeProperty('--fit-scale');
     };
 
     const fitOnResize = () => applyFitScale();
 
-    elements.btnFitTable.addEventListener('click', () => {
+    const toggleFitMode = () => {
         const active = elements.scheduleContainer.classList.toggle('fit-mode');
-        elements.btnFitTable.classList.toggle('active', active);
-        elements.btnFitTable.setAttribute('aria-pressed', String(active));
+        [elements.btnFitTable, elements.btnFitTableM].forEach(btn => {
+            btn.classList.toggle('active', active);
+            btn.setAttribute('aria-pressed', String(active));
+        });
 
         if (active) {
             document.body.style.overflow = 'hidden';
@@ -1901,16 +1972,18 @@ function setupEventListeners() {
         } else {
             exitFitMode();
         }
-    });
+    };
 
-    // Rotating the phone crosses the 1024px breakpoint: rebuild the grid in
-    // the orientation that matches the new viewport (mobile = transposed).
-    // matchMedia change events proved flaky under viewport emulation, so
-    // resolve the orientation on every resize instead.
+    elements.btnFitTable.addEventListener('click', toggleFitMode);
+    elements.btnFitTableM.addEventListener('click', toggleFitMode);
+
+    // Crossing the 1024px breakpoint re-renders so the table adopts the
+    // per-breakpoint paddings/cell sizes. Grid orientation no longer
+    // depends on the viewport — the normal grid is universal, fit-mode is
+    // always transposed.
     const onViewportChange = () => {
-        if (isFitMode()) return; // fit-mode always renders transposed anyway
-        const mobile = isMobileViewport();
-        if (mobile !== state.currentTransposed) renderSchedule();
+        if (isFitMode()) return; // fit-mode keeps its transposed grid
+        renderSchedule();
     };
     window.addEventListener('resize', onViewportChange);
 
@@ -1949,6 +2022,35 @@ function setupEventListeners() {
         elements.customDataModal.classList.remove('active');
     });
 
+    // Custom-data modal tabs: import | guide
+    // dl.dropboxusercontent.com + raw=1 → direct MP4 stream (no download page)
+    const GUIDE_VIDEO_URL = 'https://dl.dropboxusercontent.com/scl/fi/am9w2tvohu6prl1056xaw/Custome-Data-low.mp4?rlkey=gi4mpqegaq71qet3ishulfr2k&st=an1qljhz&raw=1';
+    const setCustomDataTab = (tab) => {
+        const isGuide = tab === 'guide';
+        elements.tabDataImport.classList.toggle('active', !isGuide);
+        elements.tabDataImport.setAttribute('aria-selected', String(!isGuide));
+        elements.tabDataGuide.classList.toggle('active', isGuide);
+        elements.tabDataGuide.setAttribute('aria-selected', String(isGuide));
+        elements.paneDataImport.classList.toggle('active', !isGuide);
+        elements.paneDataGuide.classList.toggle('active', isGuide);
+    };
+    elements.tabDataImport.addEventListener('click', () => setCustomDataTab('import'));
+    elements.tabDataGuide.addEventListener('click', () => setCustomDataTab('guide'));
+
+    // Guide video: load lazily only when requested; pause when hidden
+    let guideVideoLoaded = false;
+    elements.btnGuideVideo.addEventListener('click', () => {
+        elements.guideVideoWrap.hidden = false;
+        if (!guideVideoLoaded) {
+            elements.guideVideoFrame.src = GUIDE_VIDEO_URL;
+            guideVideoLoaded = true;
+        }
+    });
+    // Switching back to the import tab pauses playback
+    elements.tabDataImport.addEventListener('click', () => {
+        elements.guideVideoFrame.pause();
+    });
+
     // Theme toggle
     elements.themeToggle.addEventListener('click', toggleTheme);
 
@@ -1960,6 +2062,15 @@ function setupEventListeners() {
     elements.closeConflictModal.addEventListener('click', closeAllModals);
     elements.btnCloseConflictModal.addEventListener('click', closeAllModals);
     elements.closeCustomDataModal.addEventListener('click', closeAllModals);
+
+    // Data-freshness notice: close via X or footer button
+    elements.closeFreshnessModal.addEventListener('click', closeAllModals);
+    elements.btnCloseFreshness.addEventListener('click', closeAllModals);
+    // "Enter your own data" jumps straight to the custom-data modal
+    elements.btnOpenCustomDataFreshness.addEventListener('click', () => {
+        closeAllModals();
+        elements.customDataModal.classList.add('active');
+    });
 
     // Remove course button (info modal)
     elements.btnRemoveCourse.addEventListener('click', () => {
@@ -2026,6 +2137,15 @@ async function init() {
 
     // Load fresh data from files (every page request)
     await Promise.all([loadCourses(), loadLastUpdate()]);
+
+    // Data-freshness notice: shown on every page load, after the last-update
+    // date is known. Warns the data may be stale + points to custom-data import.
+    if (state.customActive) {
+        elements.freshnessLastUpdate.textContent = 'دیتای دلخواه شما';
+    } else {
+        elements.freshnessLastUpdate.textContent = elements.lastUpdateValue.textContent;
+    }
+    elements.freshnessModal.classList.add('active');
 
     // Restore + validate selections against the active dataset
     loadFromStorage();

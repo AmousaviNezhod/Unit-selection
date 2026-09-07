@@ -214,12 +214,12 @@
                 <div class="schedule-container" id="scheduleContainer">
                     <div class="schedule-header">
                         <h2 class="schedule-title">جدول زمان‌بندی</h2>
-                        <button class="fit-close-btn" id="btnFitClose" type="button" aria-label="بستن تمام‌صفحه">
+                        <button class="fit-close-btn" id="btnFitClose" type="button" aria-label="بازگشت از حالت تمام‌صفحه">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <line x1="18" y1="6" x2="6" y2="18"></line>
                                 <line x1="6" y1="6" x2="18" y2="18"></line>
                             </svg>
-                            بستن
+                            بازگشت
                         </button>
                         <div class="units-flag" id="unitsFlag">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -270,6 +270,61 @@
             </section>
 
         </div>
+
+        <!-- ===== MOBILE BOTTOM ACTION BAR (fixed bottom, phones only) ===== -->
+        <nav class="mobile-action-bar" id="mobileActionBar" aria-label="عملیات جدول">
+            <button type="button" class="bar-btn primary" id="btnViewListM">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="8" y1="6" x2="21" y2="6"></line>
+                    <line x1="8" y1="12" x2="21" y2="12"></line>
+                    <line x1="8" y1="18" x2="21" y2="18"></line>
+                    <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                    <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                    <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                </svg>
+                <span>لیست</span>
+            </button>
+            <button type="button" class="bar-btn" id="btnExportPDFM">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                </svg>
+                <span>PDF</span>
+            </button>
+            <button type="button" class="bar-btn" id="btnCopyTableM">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+                <span>کپی</span>
+            </button>
+            <button type="button" class="bar-btn" id="btnCustomDataM">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="17 8 12 3 7 8"></polyline>
+                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+                <span>دیتا</span>
+            </button>
+            <button type="button" class="bar-btn danger" id="btnResetM">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
+                <span>ریست</span>
+            </button>
+            <button type="button" class="bar-btn" id="btnFitTableM" aria-pressed="false" title="نمایش کل جدول در صفحه">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="3 9 3 3 9 3"></polyline>
+                    <polyline points="15 3 21 3 21 9"></polyline>
+                    <polyline points="21 15 21 21 15 21"></polyline>
+                    <polyline points="9 21 3 21 3 15"></polyline>
+                </svg>
+                <span>تمام‌صفحه</span>
+            </button>
+        </nav>
 
     </main>
 
@@ -384,18 +439,119 @@
                     </svg>
                 </button>
             </div>
-            <div class="modal-body">
-                <p class="custom-data-hint">
-                    کد HTML جدول دروس (مشابه خروجی سایت آموزش / فایل <span class="code-hint">example.txt</span>) را در کادر زیر قرار دهید.
-                    پس از بارگذاری، لیست دروس از دیتای جدید ساخته می‌شود و دیتای پیش‌فرض غیرفعال خواهد شد.
-                    <strong class="custom-data-warning">توجه: با بارگذاری دیتای جدید، تمام دروس انتخاب‌شده‌ی قبلی حذف و جدول زمان‌بندی از ابتدا ریست می‌شود.</strong>
-                </p>
-                <textarea id="customDataInput" class="custom-data-textarea" dir="ltr" spellcheck="false" placeholder="&lt;table&gt;...&lt;/table&gt;"></textarea>
-                <div class="custom-data-status" id="customDataStatus"></div>
+
+            <!-- Tabs -->
+            <div class="modal-tabs" role="tablist">
+                <button class="modal-tab active" id="tabDataImport" role="tab" aria-selected="true" aria-controls="paneDataImport">وارد کردن دیتا</button>
+                <button class="modal-tab" id="tabDataGuide" role="tab" aria-selected="false" aria-controls="paneDataGuide">آموزش وارد کردن دیتا</button>
             </div>
-            <div class="modal-footer">
-                <button class="btn-secondary" id="btnRestoreDefault">بازگشت به دیتای پیش‌فرض</button>
-                <button class="btn-primary" id="btnLoadCustomData">بارگذاری دیتا</button>
+
+            <!-- Tab 1: import -->
+            <div class="modal-tab-pane active" id="paneDataImport" role="tabpanel">
+                <div class="modal-body">
+                    <p class="custom-data-hint">
+                        کد HTML جدول دروس (مشابه خروجی سایت آموزش / فایل <span class="code-hint">example.txt</span>) را در کادر زیر قرار دهید.
+                        پس از بارگذاری، لیست دروس از دیتای جدید ساخته می‌شود و دیتای پیش‌فرض غیرفعال خواهد شد.
+                        <strong class="custom-data-warning">توجه: با بارگذاری دیتای جدید، تمام دروس انتخاب‌شده‌ی قبلی حذف و جدول زمان‌بندی از ابتدا ریست می‌شود.</strong>
+                    </p>
+                    <textarea id="customDataInput" class="custom-data-textarea" dir="ltr" spellcheck="false" placeholder="&lt;table&gt;...&lt;/table&gt;"></textarea>
+                    <div class="custom-data-status" id="customDataStatus"></div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-secondary" id="btnRestoreDefault">بازگشت به دیتای پیش‌فرض</button>
+                    <button class="btn-primary" id="btnLoadCustomData">بارگذاری دیتا</button>
+                </div>
+            </div>
+
+            <!-- Tab 2: guide -->
+            <div class="modal-tab-pane" id="paneDataGuide" role="tabpanel">
+                <div class="modal-body">
+                    <ol class="guide-steps">
+                        <li class="guide-step">
+                            <span class="guide-step-num">۱</span>
+                            <div class="guide-step-body">
+                                <strong>وارد پورتال دانشجویی شوید.</strong>
+                                به <a class="guide-link" href="https://pooya.sadjad.ac.ir/gateway/PuyaAuthenticate.php" target="_blank" rel="noopener noreferrer">سایت دانشگاه (پویا)</a> بروید و با حساب دانشجویی خود لاگین کنید.
+                            </div>
+                        </li>
+                        <li class="guide-step">
+                            <span class="guide-step-num">۲</span>
+                            <div class="guide-step-body">
+                                <strong>جدول دروس را باز کنید.</strong>
+                                از منوی <em>مالی</em> به بخش <em>دروس ارائه شده ترم</em> بروید و لیست دروس ترم مربوطه را انتخاب و <em>لود</em> کنید.
+                            </div>
+                        </li>
+                        <li class="guide-step">
+                            <span class="guide-step-num">۳</span>
+                            <div class="guide-step-body">
+                                <strong>Inspect بگیرید.</strong>
+                                روی جدول راست‌کلیک کنید و <em>Inspect</em> (یا کلید <kbd class="kbd">F12</kbd>) را بزنید تا ابزار توسعه‌دهنده باز شود.
+                            </div>
+                        </li>
+                        <li class="guide-step">
+                            <span class="guide-step-num">۴</span>
+                            <div class="guide-step-body">
+                                <strong>کد جدول را پیدا کنید.</strong>
+                                با ابزار <em>انتخاب المنت</em> (<kbd class="kbd">Ctrl</kbd>+<kbd class="kbd">Shift</kbd>+<kbd class="kbd">C</kbd>) روی جدول کلیک کنید؛ تگ <span class="code-hint">&lt;table&gt;</span> مربوطه در کد هایلایت می‌شود.
+                            </div>
+                        </li>
+                        <li class="guide-step">
+                            <span class="guide-step-num">۵</span>
+                            <div class="guide-step-body">
+                                <strong>کپی و پیست کنید.</strong>
+                                روی تگ جدول راست‌کلیک و <em>Copy → Copy outerHTML</em> بزنید، سپس کد را در تب «وارد کردن دیتا» پیست کرده و <em>بارگذاری دیتا</em> را بزنید.
+                            </div>
+                        </li>
+                    </ol>
+
+                    <button class="btn-secondary guide-video-btn" id="btnGuideVideo">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                            <polygon points="5 3 19 12 5 21 5 3" fill="currentColor" stroke="none"></polygon>
+                        </svg>
+                        نمایش آموزش ویدیویی
+                    </button>
+                    <div class="guide-video-wrap" id="guideVideoWrap" hidden>
+                        <video id="guideVideoFrame" controls playsinline preload="metadata" title="آموزش وارد کردن دیتا"></video>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Data Freshness Notice (shown once per page load) -->
+    <div class="modal-overlay" id="freshnessModal">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h3 class="modal-title">قبل از انتخاب درس</h3>
+                <button class="modal-close" id="closeFreshnessModal">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body freshness-body">
+                <div class="conflict-icon freshness-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                </div>
+                <p class="conflict-message">
+                    اطلاعات دروس ممکن است به‌روز نباشد. پیش از ثبت‌نام، جدول ارائه‌ی ترم را حتماً با پورتال دانشگاه تطبیق دهید.
+                </p>
+                <p class="freshness-update-line">
+                    آخرین به‌روزرسانی دیتای این ابزار: <strong id="freshnessLastUpdate">—</strong>
+                </p>
+                <div class="freshness-hint">
+                    برای وارد کردن دیتای لحظه‌ای خودتان، از دکمه‌ی
+                    <span class="code-hint">دیتای دلخواه</span>
+                    استفاده کنید — آموزش گام‌به‌گام هم داخل همان پنجره قرار دارد.
+                </div>
+            </div>
+            <div class="modal-footer freshness-footer">
+                <button class="btn-primary" id="btnOpenCustomDataFreshness">وارد کردن دیتای جدید</button>
+                <button class="btn-secondary" id="btnCloseFreshness">متوجه شدم</button>
             </div>
         </div>
     </div>
