@@ -30,6 +30,7 @@ const CONFIG = {
     // LocalStorage keys
     STORAGE_KEY: 'university_scheduler_selected_courses',
     CUSTOM_DATA_KEY: 'university_scheduler_custom_data',
+    DEGREE_KEY: 'university_scheduler_degree',
 
     // Schedule settings
     DAYS: ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه'],
@@ -49,7 +50,8 @@ const CONFIG = {
     ],
 
     // Toast duration
-    TOAST_DURATION: 2000
+    TOAST_DURATION: 2000,
+    TOAST_WARNING_DURATION: 5000 // warnings stay longer — user must read them
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -65,6 +67,7 @@ const state = {
     currentHours: CONFIG.HOURS, // Hours currently rendered on grid
     currentTransposed: false, // True while the fit-mode transposed grid is rendered
     unitsWarned: false,     // To avoid repeating the >20 units toast
+    degree: '',             // Selected degree level (مقطع); '' = all degrees
     filters: {              // Advanced filters (shared panel + mobile)
         days: new Set(),        // Empty set = all days
         startHour: null,        // Course sessions must start >= this hour
@@ -80,14 +83,55 @@ const state = {
     }
 };
 
-/** Active dataset (custom overrides default) */
+/** Active dataset (custom overrides default), narrowed by the degree (مقطع) choice */
 function getActiveCourses() {
-    return state.customActive ? state.customCourses : state.defaultCourses;
+    const all = state.customActive ? state.customCourses : state.defaultCourses;
+    return state.degree ? all.filter(c => c.degree === state.degree) : all;
 }
 
 /** Courses listed in pickers: only the active dataset (custom fully replaces default) */
 function getListCourses() {
     return getActiveCourses();
+}
+
+/** Distinct degree levels present in the full (unfiltered) dataset */
+function getDegreeOptions() {
+    const all = state.customActive ? state.customCourses : state.defaultCourses;
+    const set = new Set();
+    all.forEach(c => { if (c.degree) set.add(c.degree); });
+    return [...set].sort((a, b) => a.localeCompare(b, 'fa'));
+}
+
+/**
+ * Degree select in the freshness modal: refill options from the dataset and
+ * restore the saved choice (kept only if still present in the data).
+ */
+function populateDegreeSelect() {
+    const select = elements.degreeSelect;
+    if (!select) return;
+    const current = state.degree;
+    select.innerHTML = '<option value="">همه مقاطع</option>' +
+        getDegreeOptions().map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join('');
+    select.value = getDegreeOptions().includes(current) ? current : '';
+    state.degree = select.value;
+    saveDegree(select.value);
+}
+
+function saveDegree(degree) {
+    try {
+        if (degree) localStorage.setItem(CONFIG.DEGREE_KEY, degree);
+        else localStorage.removeItem(CONFIG.DEGREE_KEY);
+    } catch (error) {
+        console.error('Error saving degree:', error);
+    }
+}
+
+function loadSavedDegree() {
+    try {
+        return localStorage.getItem(CONFIG.DEGREE_KEY) || '';
+    } catch (error) {
+        return '';
+    }
 }
 
 /** Is a course selectable? Capacity-full courses are locked (unless already selected) */
@@ -224,6 +268,7 @@ const elements = {
     btnCloseFreshness: document.getElementById('btnCloseFreshness'),
     btnOpenCustomDataFreshness: document.getElementById('btnOpenCustomDataFreshness'),
     freshnessLastUpdate: document.getElementById('freshnessLastUpdate'),
+    degreeSelect: document.getElementById('degreeSelect'),
 
     // Toast
     toastContainer: document.getElementById('toastContainer')
@@ -401,6 +446,17 @@ function getCourseSchedule(row) {
     return [];
 }
 
+/** Extract the degree level (مقطع) from the course-detail tooltip, e.g. "كارشناسي" */
+function getCourseDegree(row) {
+    for (const img of row.querySelectorAll('img[title]')) {
+        const title = img.getAttribute('title') || '';
+        if (!title.includes('مقطع')) continue;
+        const m = title.match(/مقطع:?\s*(?:<\/b>)?\s*([^<&]+?)(?:<br|$)/);
+        if (m) return m[1].replace(/&lt;br&gt;.*$/, '').trim();
+    }
+    return '';
+}
+
 /**
  * Parse the portal HTML table (see example.txt) into course objects
  */
@@ -437,6 +493,7 @@ function parseTableData(html) {
         // Pick the course-detail tooltip, not the co-professor one (first img[title]
         // in the row may be the "اساتید همکار" tooltip inside the professor cell)
         const schedule = getCourseSchedule(row);
+        const degree = getCourseDegree(row);
 
         const id = `${code}-${group}`;
         if (seen.has(id)) return;
@@ -451,6 +508,7 @@ function parseTableData(html) {
             capacity,
             registered,
             schedule,
+            degree,
             color: CONFIG.PALETTE[courses.length % CONFIG.PALETTE.length]
         });
     });
@@ -531,6 +589,13 @@ function buildFilterFieldsHtml() {
 
     return `
         <div class="filter-detail-grid">
+            <label class="filter-field">
+                <span>مقطع</span>
+                <select data-filter="degree"><option value="">همه مقاطع</option>
+                    ${getDegreeOptions().map(d =>
+                        `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join('')}
+                </select>
+            </label>
             <label class="filter-field">
                 <span>از ساعت</span>
                 <select data-filter="startHour"><option value="">—</option>${hourOpts}</select>
@@ -643,6 +708,9 @@ function syncFilterBar(bar) {
     setVal('[data-filter="endHour"]', f.endHour);
     setVal('[data-filter="exactHour"]', f.exactHour);
     setVal('[data-filter="unitsMin"]', f.units);
+    // Degree is a global (state.degree), not part of state.filters
+    const deg = bar.querySelector('[data-filter="degree"]');
+    if (deg && document.activeElement !== deg) deg.value = state.degree;
     const prof = bar.querySelector('[data-filter="professor"]');
     if (prof && document.activeElement !== prof) prof.value = f.professor;
     const grp = bar.querySelector('[data-filter="group"]');
@@ -789,6 +857,13 @@ function bindFilterBar(bar) {
         else if (kind === 'unitsMin') {
             // "3plus" = 3 units or more, otherwise an exact count
             state.filters.units = raw === '3plus' ? '3plus' : num;
+        }
+        else if (kind === 'degree') {
+            // Same data source as the freshness-modal select — keep both in sync
+            state.degree = raw;
+            saveDegree(state.degree);
+            elements.degreeSelect.value = state.degree;
+            rebuildFilterBars(); // professor dropdown + degree options follow
         }
 
         syncFilterBars();
@@ -1170,22 +1245,20 @@ function addCourse(courseId) {
         return;
     }
 
+    // Same course code in another group (e.g. گروه ۱ vs گروه ۲) counts as the
+    // same course — a student takes it once, so block the duplicate
+    const duplicate = state.selectedCourses
+        .map(findCourseById)
+        .find(c => c && c.code === course.code);
+    if (duplicate) {
+        showToast(`درس "${course.name}" را قبلاً برداشته‌اید (گروه ${toPersianNumber(duplicate.group)}) — هر درس فقط یک‌بار قابل انتخاب است`, 'warning');
+        return;
+    }
+
     // Capacity full: selection blocked at the source too (not just UI)
     if (!isCapacityAvailable(course)) {
         showToast(`ظرفیت درس "${course.name}" پر شده است`, 'error');
         return;
-    }
-
-    // Block time conflicts
-    for (const existingId of state.selectedCourses) {
-        const existingCourse = findCourseById(existingId);
-        if (existingCourse) {
-            const conflict = checkConflict(course, existingCourse);
-            if (conflict.hasConflict) {
-                showConflictModal(course, existingCourse, conflict);
-                return;
-            }
-        }
     }
 
     const wasOverLimit = getTotalUnits() > CONFIG.MAX_UNITS;
@@ -1638,13 +1711,19 @@ function renderSelectedList() {
             ? course.schedule.map(s => `${escapeHtml(s.day)} ${toPersianTime(s.start)}-${toPersianTime(s.end)}`).join('، ')
             : 'بدون زمان‌بندی مشخص';
 
+        const capacityFull = !isCapacityAvailable(course);
+        const capacityText = course.capacity > 0
+            ? `ظرفیت: ${toPersianNumber(course.registered)} از ${toPersianNumber(course.capacity)}${capacityFull ? ' (تکمیل)' : ''}`
+            : 'ظرفیت: نامشخص';
+
         return `
             <div class="selected-item">
                 <div class="selected-item-info">
-                    <span class="selected-item-name">${escapeHtml(course.name)}</span>
+                    <span class="selected-item-name">${escapeHtml(course.name)}${course.degree ? `<span class="selected-item-degree">${escapeHtml(course.degree)}</span>` : ''}</span>
                     <span class="selected-item-meta">
                         ${escapeHtml(course.professor)} | ${formatUnits(course.units)} واحد | گروه ${toPersianNumber(course.group)} | کد ${toPersianNumber(course.code)}<br>
-                        ${scheduleText}
+                        ${scheduleText}<br>
+                        ${capacityText}
                     </span>
                 </div>
                 <button class="selected-item-remove" data-course-id="${courseId}" title="حذف">
@@ -1880,10 +1959,12 @@ function showToast(message, type = 'info') {
 
     elements.toastContainer.appendChild(toast);
 
+    // Warnings linger longer so the user has time to read them
+    const duration = type === 'warning' ? CONFIG.TOAST_WARNING_DURATION : CONFIG.TOAST_DURATION;
     setTimeout(() => {
         toast.classList.add('removing');
         toast.addEventListener('animationend', () => toast.remove());
-    }, CONFIG.TOAST_DURATION);
+    }, duration);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2094,6 +2175,16 @@ function setupEventListeners() {
     // Data-freshness notice: close via X or footer button
     elements.closeFreshnessModal.addEventListener('click', closeAllModals);
     elements.btnCloseFreshness.addEventListener('click', closeAllModals);
+    // Degree (مقطع) choice filters the whole active dataset live
+    elements.degreeSelect.addEventListener('change', () => {
+        state.degree = elements.degreeSelect.value;
+        saveDegree(state.degree);
+        populateDegreeSelect(); // keeps the chosen option selected
+        updateSummary();
+        rebuildFilterBars(); // professor dropdown follows the narrowed dataset
+        refreshLists();
+        renderSchedule();
+    });
     // "Enter your own data" jumps straight to the custom-data modal
     elements.btnOpenCustomDataFreshness.addEventListener('click', () => {
         closeAllModals();
@@ -2165,6 +2256,11 @@ async function init() {
 
     // Load fresh data from files (every page request)
     await Promise.all([loadCourses(), loadLastUpdate()]);
+
+    // Degree (مقطع) choice: restore the saved selection before lists render,
+    // then fill the modal select from the degrees present in the data
+    state.degree = loadSavedDegree();
+    populateDegreeSelect();
 
     // Data-freshness notice: shown on every page load, after the last-update
     // date is known. Warns the data may be stale + points to custom-data import.
