@@ -75,6 +75,7 @@ const state = {
         group: '',              // Substring match (e.g. "40")
         hasTime: false,         // Only courses with fixed class time
         onlyAvailable: false,   // Only courses with free capacity
+        onlyFull: false,        // Only courses whose capacity is full
         sortAsc: null           // null | 'asc' | 'desc' — sort results by name
     }
 };
@@ -89,11 +90,20 @@ function getListCourses() {
     return getActiveCourses();
 }
 
-/** Is a course selectable? */
+/** Is a course selectable? Capacity-full courses are locked (unless already selected) */
 function isSelectable(course) {
+    if (!isCapacityAvailable(course)) return false;
     return state.customActive
         ? state.customCourses.some(c => getCourseId(c) === getCourseId(course))
         : true;
+}
+
+/** True when the course still has free seats (or capacity is unknown/0-capped custom rows) */
+function isCapacityAvailable(course) {
+    if (!course) return true;
+    // capacity 0 = ظرفیت نامشخص (e.g. کاراموزی/پروژه) — treat as available
+    if (course.capacity === 0) return true;
+    return course.registered < course.capacity;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -146,7 +156,6 @@ const elements = {
     btnExportPDFM: document.getElementById('btnExportPDFM'),
     btnCustomDataM: document.getElementById('btnCustomDataM'),
     btnResetM: document.getElementById('btnResetM'),
-    btnFitTableM: document.getElementById('btnFitTableM'),
 
     // Schedule
     scheduleBody: document.getElementById('scheduleBody'),
@@ -578,6 +587,7 @@ function buildFilterBarHtml() {
             </button>
             ${dayChips}
             <button type="button" class="filter-chip" data-filter="onlyAvailable">ظرفیت آزاد</button>
+            <button type="button" class="filter-chip" data-filter="onlyFull">ظرفیت پر</button>
             <button type="button" class="filter-chip" data-filter="sort" title="مرتب‌سازی بر اساس نام درس">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M3 6h13M3 12h9M3 18h5"></path>
@@ -603,6 +613,7 @@ function syncFilterBar(bar) {
     });
     bar.querySelector('[data-filter="hasTime"]')?.classList.toggle('active', f.hasTime);
     bar.querySelector('[data-filter="onlyAvailable"]')?.classList.toggle('active', f.onlyAvailable);
+    bar.querySelector('[data-filter="onlyFull"]')?.classList.toggle('active', f.onlyFull);
 
     // Sort chip cycles: none → asc → desc → none
     const sortBtn = bar.querySelector('[data-filter="sort"]');
@@ -662,6 +673,7 @@ function buildFilterDrawerHtml() {
         </div>
         <div class="filter-row">
             <button type="button" class="filter-chip" data-filter="onlyAvailable">ظرفیت آزاد</button>
+            <button type="button" class="filter-chip" data-filter="onlyFull">ظرفیت پر</button>
             <button type="button" class="filter-chip" data-filter="sort" title="مرتب‌سازی بر اساس نام درس">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M3 6h13M3 12h9M3 18h5"></path>
@@ -715,7 +727,7 @@ function bindFilterBar(bar) {
             state.filters = {
                 days: new Set(), startHour: null, endHour: null,
                 exactHour: null, professor: '', units: null,
-                group: '', hasTime: false, onlyAvailable: false, sortAsc: null
+                group: '', hasTime: false, onlyAvailable: false, onlyFull: false, sortAsc: null
             };
             syncFilterBars();
             refreshLists();
@@ -729,6 +741,11 @@ function bindFilterBar(bar) {
             state.filters.hasTime = !state.filters.hasTime;
         } else if (kind === 'onlyAvailable') {
             state.filters.onlyAvailable = !state.filters.onlyAvailable;
+            // ظرفیت آزاد / ظرفیت پر are mutually exclusive
+            if (state.filters.onlyAvailable) state.filters.onlyFull = false;
+        } else if (kind === 'onlyFull') {
+            state.filters.onlyFull = !state.filters.onlyFull;
+            if (state.filters.onlyFull) state.filters.onlyAvailable = false;
         } else if (kind === 'sort') {
             // Cycle: none → asc → desc → none
             state.filters.sortAsc = state.filters.sortAsc === 'asc'
@@ -885,7 +902,7 @@ function hasActiveFilters() {
         || f.professor !== ''
         || f.units != null
         || f.group.trim() !== ''
-        || f.hasTime || f.onlyAvailable
+        || f.hasTime || f.onlyAvailable || f.onlyFull
         || f.sortAsc != null;
 }
 
@@ -901,6 +918,7 @@ function countActiveFilters() {
     if (f.group.trim()) n++;
     if (f.hasTime) n++;
     if (f.onlyAvailable) n++;
+    if (f.onlyFull) n++;
     return n;
 }
 
@@ -914,6 +932,11 @@ function matchesFilters(course) {
         const remaining = course.capacity - course.registered;
         if (course.capacity > 0 && remaining <= 0) return false;
         if (course.capacity === 0) return false;
+    }
+
+    // ظرفیت پر: only courses whose seats are all taken
+    if (f.onlyFull) {
+        if (course.capacity === 0 || course.registered < course.capacity) return false;
     }
 
     if (f.days.size) {
@@ -1001,17 +1024,18 @@ function scheduleTagsHtml(course) {
 function courseCardHtml(course) {
     const courseId = getCourseId(course);
     const isSelected = state.selectedCourses.includes(courseId);
-    const selectable = isSelectable(course);
+    const capacityFull = !isCapacityAvailable(course);
+    const selectable = isSelected || isSelectable(course);
 
-    const badge = !selectable
-        ? '<span class="course-badge default-badge">پیش‌فرض</span>'
+    const badge = capacityFull
+        ? '<span class="course-badge full-badge">ظرفیت پر</span>'
         : '';
 
     const btn = isSelected
         ? `<button class="btn-add-course selected" data-course-id="${courseId}">✓ اضافه شده - حذف</button>`
         : (selectable
             ? `<button class="btn-add-course" data-course-id="${courseId}" ${course.schedule.length ? '' : 'data-no-time="1"'}>+ افزودن به برنامه</button>`
-            : `<button class="btn-add-course" disabled>غیرفعال</button>`);
+            : `<button class="btn-add-course" disabled>ظرفیت تکمیل</button>`);
 
     return `
         <div class="course-result ${selectable ? '' : 'disabled'}" data-course-id="${courseId}">
@@ -1140,6 +1164,12 @@ function addCourse(courseId) {
 
     if (state.selectedCourses.includes(courseId)) {
         showToast('این درس قبلاً اضافه شده است', 'warning');
+        return;
+    }
+
+    // Capacity full: selection blocked at the source too (not just UI)
+    if (!isCapacityAvailable(course)) {
+        showToast(`ظرفیت درس "${course.name}" پر شده است`, 'error');
         return;
     }
 
@@ -1921,7 +1951,7 @@ function setupEventListeners() {
     elements.btnExportPDF.addEventListener('click', exportPDF);
     elements.btnReset.addEventListener('click', resetSchedule);
 
-    // Mobile bottom action bar — same actions as the controls above
+    // Mobile floating action dock — same actions as the controls above
     elements.btnViewListM.addEventListener('click', () => {
         renderSelectedList();
         elements.listModal.classList.add('active');
@@ -1936,14 +1966,12 @@ function setupEventListeners() {
 
     // Fit-whole-table toggle (mobile screenshot helper): schedule container
     // goes fullscreen with a transposed grid (hours as rows) that fits width.
-    // Triggered from the schedule header button AND the bottom bar's button.
+    // Triggered from the schedule header button only.
     const exitFitMode = () => {
         if (!elements.scheduleContainer.classList.contains('fit-mode')) return;
         elements.scheduleContainer.classList.remove('fit-mode');
-        [elements.btnFitTable, elements.btnFitTableM].forEach(btn => {
-            btn.classList.remove('active');
-            btn.setAttribute('aria-pressed', 'false');
-        });
+        elements.btnFitTable.classList.remove('active');
+        elements.btnFitTable.setAttribute('aria-pressed', 'false');
         document.body.style.overflow = '';
         window.removeEventListener('resize', fitOnResize);
         renderSchedule(); // back to the normal day-rows / hour-columns grid
@@ -1959,10 +1987,8 @@ function setupEventListeners() {
 
     const toggleFitMode = () => {
         const active = elements.scheduleContainer.classList.toggle('fit-mode');
-        [elements.btnFitTable, elements.btnFitTableM].forEach(btn => {
-            btn.classList.toggle('active', active);
-            btn.setAttribute('aria-pressed', String(active));
-        });
+        elements.btnFitTable.classList.toggle('active', active);
+        elements.btnFitTable.setAttribute('aria-pressed', String(active));
 
         if (active) {
             document.body.style.overflow = 'hidden';
@@ -1975,7 +2001,6 @@ function setupEventListeners() {
     };
 
     elements.btnFitTable.addEventListener('click', toggleFitMode);
-    elements.btnFitTableM.addEventListener('click', toggleFitMode);
 
     // Crossing the 1024px breakpoint re-renders so the table adopts the
     // per-breakpoint paddings/cell sizes. Grid orientation no longer

@@ -705,6 +705,12 @@ body.modal-open {
     background-color: transparent;
 }
 
+.full-badge {
+    color: var(--danger);
+    border-color: var(--danger);
+    background-color: transparent;
+}
+
 .course-result-code {
     font-size: var(--font-size-xs);
     font-weight: var(--font-medium);
@@ -850,22 +856,25 @@ body.modal-open {
     gap: var(--space-3);
 }
 
-/* ── Mobile fixed bottom action bar (phones only) ──────────────
-   Mirrors the .controls-wrapper actions; desktop keeps the inline
-   buttons above the schedule */
+/* ── Mobile floating action dock (phones only) ─────────────────
+   Mirrors the .controls-wrapper actions; floats detached from the
+   bottom edge; desktop keeps the inline buttons above the schedule */
 .mobile-action-bar {
     display: none; /* desktop: inline buttons stay above the schedule */
     position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
+    bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+    left: var(--space-3);
+    right: var(--space-3);
     z-index: var(--z-dropdown);
-    background-color: var(--bg-secondary);
-    border-top: 2px solid var(--border-primary);
-    padding: var(--space-2) var(--space-2) calc(var(--space-2) + env(safe-area-inset-bottom, 0px));
+    background-color: rgba(20, 20, 20, 0.92);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    border: 2px solid var(--border-primary);
+    border-radius: var(--radius-lg);
+    padding: var(--space-2);
     justify-content: space-around;
     gap: var(--space-1);
-    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
 }
 
 .bar-btn {
@@ -899,27 +908,12 @@ body.modal-open {
     color: var(--text-primary);
 }
 
-.bar-btn.primary {
-    color: var(--text-primary);
-    background-color: var(--bg-tertiary);
-    border-color: var(--border-primary);
-}
-
-.bar-btn.primary:active {
-    background-color: var(--bg-hover);
-}
-
 .bar-btn.danger {
     color: var(--danger);
 }
 
 .bar-btn.danger:active {
     background-color: rgba(239, 68, 68, 0.12);
-}
-
-.bar-btn.active {
-    color: var(--text-primary);
-    background-color: var(--bg-hover);
 }
 
 .control-btn {
@@ -2619,7 +2613,7 @@ body.modal-open {
         order: 2;
     }
 
-    /* Action buttons move from above the schedule into the fixed bottom bar */
+    /* Action buttons move from above the schedule into the floating dock */
     .controls-wrapper {
         display: none;
     }
@@ -2628,17 +2622,14 @@ body.modal-open {
         display: flex;
     }
 
-    /* Keep content above the bottom bar clear */
-    .main-container {
-        padding-bottom: calc(var(--space-4) + 76px);
-    }
-
+    /* Floating dock hovers above content — keep the footer reachable
+       past it when scrolled to the bottom */
     .app-footer {
-        margin-bottom: 76px;
+        margin-bottom: calc(var(--space-4) + 88px + env(safe-area-inset-bottom, 0px));
     }
 
     .toast-container {
-        bottom: 86px; /* clear the bottom bar */
+        bottom: calc(var(--space-4) + 76px); /* clear the floating dock */
     }
 
     .header-content {

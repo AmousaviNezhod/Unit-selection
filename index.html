@@ -271,9 +271,9 @@
 
         </div>
 
-        <!-- ===== MOBILE BOTTOM ACTION BAR (fixed bottom, phones only) ===== -->
+        <!-- ===== MOBILE FLOATING ACTION DOCK (fixed, detached from bottom, phones only) ===== -->
         <nav class="mobile-action-bar" id="mobileActionBar" aria-label="عملیات جدول">
-            <button type="button" class="bar-btn primary" id="btnViewListM">
+            <button type="button" class="bar-btn" id="btnViewListM">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <line x1="8" y1="6" x2="21" y2="6"></line>
                     <line x1="8" y1="12" x2="21" y2="12"></line>
@@ -282,7 +282,7 @@
                     <line x1="3" y1="12" x2="3.01" y2="12"></line>
                     <line x1="3" y1="18" x2="3.01" y2="18"></line>
                 </svg>
-                <span>لیست</span>
+                <span>لیست دروس</span>
             </button>
             <button type="button" class="bar-btn" id="btnExportPDFM">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -291,14 +291,14 @@
                     <line x1="16" y1="13" x2="8" y2="13"></line>
                     <line x1="16" y1="17" x2="8" y2="17"></line>
                 </svg>
-                <span>PDF</span>
+                <span>خروجی PDF</span>
             </button>
             <button type="button" class="bar-btn" id="btnCopyTableM">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                     <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                 </svg>
-                <span>کپی</span>
+                <span>کپی برنامه</span>
             </button>
             <button type="button" class="bar-btn" id="btnCustomDataM">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -306,7 +306,7 @@
                     <polyline points="17 8 12 3 7 8"></polyline>
                     <line x1="12" y1="3" x2="12" y2="15"></line>
                 </svg>
-                <span>دیتا</span>
+                <span>دیتای دلخواه</span>
             </button>
             <button type="button" class="bar-btn danger" id="btnResetM">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -314,15 +314,6 @@
                     <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                 </svg>
                 <span>ریست</span>
-            </button>
-            <button type="button" class="bar-btn" id="btnFitTableM" aria-pressed="false" title="نمایش کل جدول در صفحه">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polyline points="3 9 3 3 9 3"></polyline>
-                    <polyline points="15 3 21 3 21 9"></polyline>
-                    <polyline points="21 15 21 21 15 21"></polyline>
-                    <polyline points="9 21 3 21 3 15"></polyline>
-                </svg>
-                <span>تمام‌صفحه</span>
             </button>
         </nav>
 
