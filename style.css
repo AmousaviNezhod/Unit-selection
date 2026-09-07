@@ -156,6 +156,10 @@ body {
     transition: background-color var(--transition-base), color var(--transition-base);
 }
 
+body.modal-open {
+    overflow: hidden;
+}
+
 /* Selection */
 ::selection {
     background-color: var(--text-primary);
@@ -237,7 +241,6 @@ body {
     font-size: var(--font-size-xl);
     font-weight: var(--font-bold);
     color: var(--text-primary);
-    letter-spacing: -0.02em;
     white-space: nowrap;
 }
 
@@ -357,19 +360,184 @@ body {
     flex-shrink: 0;
 }
 
+.custom-data-banner .banner-reset-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-inline-start: auto;
+    padding: var(--space-1) var(--space-3);
+    background-color: var(--warning);
+    border: none;
+    border-radius: var(--radius-md);
+    color: #0a0a0a;
+    font-family: inherit;
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-bold);
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: filter var(--transition-fast);
+}
+
+.custom-data-banner .banner-reset-btn:hover {
+    filter: brightness(1.1);
+}
+
+.custom-data-banner .banner-reset-btn svg {
+    width: 12px;
+    height: 12px;
+}
+
 /* ─────────────────────────────────────────────────────────────
-   MOBILE SEARCH (hidden on desktop)
+   MOBILE SEARCH (trigger on page + full modal, hidden on desktop)
    ───────────────────────────────────────────────────────────── */
 
 .search-section {
     display: flex;
     flex-direction: column;
-    gap: var(--space-4);
+    gap: var(--space-2);
 }
 
-.search-container {
-    position: relative;
+.search-trigger {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
     width: 100%;
+    padding: var(--space-2) var(--space-3);
+    font-family: var(--font-family);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-medium);
+    color: var(--text-tertiary);
+    text-align: right;
+    background-color: var(--bg-secondary);
+    border: 2px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-base);
+}
+
+.search-trigger .search-icon {
+    position: static;
+    width: 16px;
+    height: 16px;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+    transition: color var(--transition-fast);
+}
+
+.search-trigger-text {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.search-trigger-hint {
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-semibold);
+    color: var(--text-secondary);
+    background-color: var(--bg-tertiary);
+    border: 1.5px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    padding: 2px var(--space-2);
+    white-space: nowrap;
+}
+
+.search-trigger:hover {
+    border-color: var(--text-primary);
+    color: var(--text-secondary);
+    background-color: var(--bg-tertiary);
+}
+
+.search-trigger:hover .search-icon {
+    color: var(--text-primary);
+}
+
+.search-trigger:focus-visible {
+    outline: 2px solid var(--border-focus);
+    outline-offset: 2px;
+}
+
+/* Search modal */
+.search-modal-overlay {
+    align-items: flex-end;
+    padding: 0;
+    background-color: rgba(0, 0, 0, 0.6);
+}
+
+.search-modal {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 88vh;
+    background-color: var(--bg-secondary);
+    border-top: 2px solid var(--border-primary);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    box-shadow: 0 -6px 0 0 rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+    transform: translateY(24px);
+    transition: transform var(--transition-base) cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.modal-overlay.active .search-modal {
+    transform: translateY(0);
+}
+
+.search-modal-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    border-bottom: 2px solid var(--border-primary);
+    background-color: var(--bg-tertiary);
+}
+
+.search-modal-header .search-input-wrapper {
+    flex: 1;
+}
+
+.search-modal-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+    color: var(--text-secondary);
+    background-color: var(--bg-secondary);
+    border: 1.5px solid var(--border-secondary);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.search-modal-close svg {
+    width: 16px;
+    height: 16px;
+}
+
+.search-modal-close:hover {
+    color: #fff;
+    background-color: var(--danger);
+    border-color: var(--danger);
+}
+
+.search-modal .filter-bar {
+    border-bottom: 2px solid var(--border-primary);
+    max-height: 38vh;
+    overflow-y: auto;
+}
+
+.search-modal .search-results {
+    flex: 1;
+    min-height: 0;
+    max-height: none;
+    position: static;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    display: flex;
+    flex-direction: column;
 }
 
 .search-input-wrapper {
@@ -449,31 +617,9 @@ body {
     height: 14px;
 }
 
-/* Search Results Dropdown */
+/* Search Results list (inside mobile modal) */
 .search-results {
-    position: absolute;
-    top: calc(100% + var(--space-2));
-    left: 0;
-    right: 0;
     background-color: var(--bg-secondary);
-    border: 2px solid var(--border-primary);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-hard-lg) rgba(0, 0, 0, 0.3);
-    opacity: 0;
-    visibility: hidden;
-    transform: translateY(-10px);
-    transition: all var(--transition-base);
-    z-index: var(--z-dropdown);
-    max-height: 400px;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-}
-
-.search-results.active {
-    opacity: 1;
-    visibility: visible;
-    transform: translateY(0);
 }
 
 .results-header {
@@ -874,6 +1020,318 @@ body {
 }
 
 /* ─────────────────────────────────────────────────────────────
+   ADVANCED FILTER BAR
+   ───────────────────────────────────────────────────────────── */
+
+.filter-bar {
+    padding: var(--space-3);
+    border-bottom: 2px solid var(--border-primary);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    background-color: var(--bg-secondary);
+}
+
+.filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+    align-items: center;
+}
+
+.filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-family: var(--font-family);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-medium);
+    color: var(--text-secondary);
+    background-color: var(--bg-primary);
+    border: 1.5px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    padding: 6px var(--space-3);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    user-select: none;
+}
+
+.filter-chip:hover {
+    color: var(--text-primary);
+    border-color: var(--border-focus);
+    background-color: var(--bg-hover);
+}
+
+.filter-chip.active {
+    color: var(--bg-primary);
+    background-color: var(--text-primary);
+    border-color: var(--text-primary);
+}
+
+.filter-chip svg {
+    width: 12px;
+    height: 12px;
+}
+
+.filter-toggle.open {
+    color: var(--text-primary);
+    border-color: var(--text-primary);
+}
+
+.filter-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 16px;
+    height: 16px;
+    font-size: 10px;
+    font-weight: var(--font-bold);
+    background-color: var(--danger);
+    color: #fff;
+    border-radius: 8px;
+    padding: 0 4px;
+}
+
+.filter-clear {
+    color: var(--danger);
+    border-color: var(--danger);
+}
+
+.filter-clear:hover {
+    background-color: var(--danger);
+    color: #fff;
+}
+
+.filter-details {
+    padding-top: var(--space-2);
+}
+
+.filter-detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-2);
+}
+
+.filter-field {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.filter-field-wide {
+    grid-column: 1 / -1;
+}
+
+.filter-field span {
+    font-size: 10px;
+    font-weight: var(--font-semibold);
+    color: var(--text-tertiary);
+}
+
+.filter-field select,
+.filter-field input {
+    width: 100%;
+    font-family: var(--font-family);
+    font-size: var(--font-size-sm);
+    color: var(--text-primary);
+    background-color: var(--bg-primary);
+    border: 1.5px solid var(--border-primary);
+    border-radius: var(--radius-sm);
+    padding: 7px var(--space-2);
+    transition: border-color var(--transition-fast);
+}
+
+.filter-field select:focus,
+.filter-field input:focus {
+    outline: none;
+    border-color: var(--text-primary);
+}
+
+/* Mobile search section: only the trigger lives on the page */
+.search-section .filter-bar {
+    display: none;
+}
+
+.search-section .search-results {
+    display: none;
+}
+
+/* Larger touch targets on mobile (44px recommended) */
+@media (max-width: 1023px) {
+    .search-modal .filter-chip {
+        padding: 9px var(--space-3);
+        font-size: var(--font-size-sm);
+    }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   PANEL FILTER TOGGLE BUTTON (desktop)
+   ───────────────────────────────────────────────────────────── */
+
+.panel-filter-toggle {
+    position: absolute;
+    left: var(--space-5);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    width: 30px;
+    height: 30px;
+    flex-shrink: 0;
+    color: var(--text-secondary);
+    background-color: var(--bg-tertiary);
+    border: 1.5px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.panel-filter-toggle svg {
+    width: 14px;
+    height: 14px;
+}
+
+.panel-filter-toggle:hover {
+    color: var(--text-primary);
+    border-color: var(--text-primary);
+    background-color: var(--bg-hover);
+}
+
+.panel-filter-toggle.active {
+    color: var(--bg-primary);
+    background-color: var(--text-primary);
+    border-color: var(--text-primary);
+}
+
+.panel-filter-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 14px;
+    height: 14px;
+    font-size: 9px;
+    font-weight: var(--font-bold);
+    background-color: var(--danger);
+    color: #fff;
+    border-radius: 8px;
+    padding: 0 3px;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   FILTER DRAWER (desktop, inline column beside the panel;
+   opens by pushing/resizing the schedule grid)
+   ───────────────────────────────────────────────────────────── */
+
+.filter-drawer {
+    display: none;
+    flex-direction: column;
+    background-color: var(--bg-secondary);
+    border: 2px solid var(--border-primary);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    position: sticky;
+    top: 90px;
+    max-height: calc(100vh - 120px);
+    min-width: 0;
+}
+
+.filter-drawer.open {
+    display: flex;
+    animation: drawer-slide-in 250ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes drawer-slide-in {
+    from {
+        opacity: 0;
+        transform: translateX(16px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.filter-drawer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-4) var(--space-5);
+    background-color: var(--bg-tertiary);
+    border-bottom: 2px solid var(--border-primary);
+}
+
+/* Mirror the panel header look */
+.filter-drawer-title {
+    font-size: var(--font-size-base);
+    font-weight: var(--font-bold);
+    color: var(--text-primary);
+}
+
+.filter-drawer-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    color: var(--text-secondary);
+    background-color: var(--bg-secondary);
+    border: 1.5px solid var(--border-secondary);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.filter-drawer-close svg {
+    width: 13px;
+    height: 13px;
+}
+
+.filter-drawer-close:hover {
+    color: #fff;
+    background-color: var(--danger);
+    border-color: var(--danger);
+}
+
+.filter-drawer-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.filter-drawer-body .filter-details {
+    padding-top: 0;
+}
+
+.filter-drawer-body .filter-detail-grid {
+    grid-template-columns: 1fr 1fr;
+}
+
+/* Focus-visible for keyboard users on filter controls */
+.filter-chip:focus-visible,
+.panel-filter-toggle:focus-visible,
+.filter-drawer-close:focus-visible,
+.filter-field select:focus-visible,
+.filter-field input:focus-visible {
+    outline: 2px solid var(--border-focus);
+    outline-offset: 2px;
+}
+
+/* Reduced motion: drop transforms/transitions */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* ─────────────────────────────────────────────────────────────
    SCHEDULE TABLE
    ───────────────────────────────────────────────────────────── */
 
@@ -951,6 +1409,123 @@ body {
     border-collapse: separate;
     border-spacing: 2px;
     min-width: 900px;
+}
+
+/* Fit-whole-table mode (mobile screenshot helper): the schedule container
+   becomes a fullscreen overlay, like a video fullscreen frame */
+.fit-table-btn {
+    display: none;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    background-color: var(--bg-secondary);
+    border: 2px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    font-family: inherit;
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-semibold);
+    cursor: pointer;
+    transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.fit-table-btn svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+}
+
+.fit-table-btn.active {
+    color: var(--text-primary);
+    border-color: var(--text-primary);
+}
+
+.fit-mode {
+    position: fixed;
+    inset: 0;
+    z-index: 120;
+    background-color: var(--bg-primary);
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Close button visible only inside fullscreen fit mode */
+.fit-close-btn {
+    display: none;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    background-color: var(--bg-secondary);
+    border: 2px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    font-family: inherit;
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-semibold);
+    cursor: pointer;
+}
+
+.fit-close-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+.fit-mode .fit-close-btn {
+    display: inline-flex;
+    color: var(--text-primary);
+    border-color: var(--text-primary);
+}
+
+.fit-mode .table-wrapper {
+    flex: 1;
+    overflow-x: hidden;
+    padding: var(--space-2);
+    display: flex;
+    align-items: flex-start;
+}
+
+/* In fit mode the table is the transposed grid (hours as rows): it is
+   narrow, fills the width, and scrolls vertically — no transform needed */
+.fit-mode .schedule-table {
+    width: 100%;
+    min-width: 0;
+    flex-shrink: 0;
+    transform: scale(var(--fit-scale, 1));
+    transform-origin: top right; /* RTL: shrink from the right edge */
+}
+
+/* Transposed grid: hour label column + one slim column per day.
+   Applies in fit-mode fullscreen AND in the normal mobile schedule
+   (renderSchedule delegates to the transposed builder on phones). */
+.schedule-table .hour-col-header {
+    width: 52px;
+    min-width: 52px;
+    font-size: var(--font-size-xs);
+    direction: ltr;
+}
+
+.schedule-table .day-col-header {
+    min-width: 34px;
+    width: 34px;
+    font-size: var(--font-size-md);
+    direction: rtl;
+    padding: var(--space-2) var(--space-1) !important;
+}
+
+.schedule-table tr.hour-row td {
+    height: 44px; /* occupied hour row (JS block math assumes 44+2 spacing) */
+    min-width: 0;
+}
+
+/* Hours with no class anywhere collapse to a slim strip (class set by JS) */
+.schedule-table tr.hour-row.empty-row td {
+    height: 18px;
+}
+
+.schedule-table tr.hour-row.empty-row th.hour-label {
+    padding: 2px var(--space-2);
+    font-size: 10px;
 }
 
 .schedule-table th,
@@ -1430,6 +2005,17 @@ body {
     line-height: 1.8;
 }
 
+.custom-data-warning {
+    display: block;
+    margin-top: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    color: var(--warning, #f59e0b);
+    background-color: rgba(245, 158, 11, 0.08);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    border-radius: var(--radius-md);
+    font-weight: 600;
+}
+
 .code-hint {
     font-family: monospace;
     background-color: var(--bg-tertiary);
@@ -1605,10 +2191,20 @@ body {
         display: none;
     }
 
+    .search-modal-overlay {
+        display: none;
+    }
+
     .workspace {
         display: grid;
         grid-template-columns: 360px minmax(0, 1fr);
         align-items: start;
+        transition: grid-template-columns var(--transition-slow) cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    /* Filter drawer becomes a third grid column (rightmost in RTL) and squeezes the schedule */
+    .workspace.drawer-open {
+        grid-template-columns: minmax(260px, 300px) 360px minmax(0, 1fr);
     }
 
     .courses-panel {
@@ -1657,6 +2253,29 @@ body {
     .courses-panel {
         display: none;
     }
+
+    .filter-drawer {
+        display: none !important;
+    }
+
+    /* Normal mobile schedule uses the transposed grid (hours as rows):
+       narrow enough to fill the width without horizontal scrolling */
+    .table-wrapper {
+        overflow-x: hidden;
+    }
+
+    .schedule-table {
+        min-width: 0;
+        width: 100%;
+    }
+
+    .time-header th {
+        min-width: 0;
+    }
+
+    .schedule-container .fit-table-btn {
+        display: none; /* whole table already fits — no fit button needed */
+    }
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -1667,6 +2286,12 @@ body {
     .main-container {
         padding: var(--space-4);
         gap: var(--space-4);
+    }
+
+    /* Screenshot helper: show fit-table toggle only on phones */
+    .fit-table-btn {
+        display: inline-flex;
+        order: 2;
     }
 
     .header-content {
@@ -1765,6 +2390,8 @@ body {
     .courses-panel,
     .app-footer,
     .modal-overlay,
+    .search-modal-overlay,
+    .filter-drawer,
     .toast-container {
         display: none !important;
     }

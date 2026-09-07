@@ -18,7 +18,7 @@
 
 const CONFIG = {
     // Footer configuration - easily editable
-    FOOTER_TEXT: 'سیستم پیش‌انتخاب واحد دانشگاه سجاد - در صورت مشابه باگ به آدرس زیر مراجعه کنید',
+    FOOTER_TEXT: 'سیستم پیش‌انتخاب واحد دانشگاهی - در صورت مشاهده باگ به آدرس زیر مراجعه کنید',
     FOOTER_LINK: 'https://AmousaviNezhod.github.io/links',
     FOOTER_LINK_TEXT: 'ساخته شده توسط سید امیرحسین موسوی نژاد',
 
@@ -49,7 +49,7 @@ const CONFIG = {
     ],
 
     // Toast duration
-    TOAST_DURATION: 3000
+    TOAST_DURATION: 2000
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -63,7 +63,20 @@ const state = {
     selectedCourses: [],    // Selected course IDs (code-group)
     currentModalCourse: null,
     currentHours: CONFIG.HOURS, // Hours currently rendered on grid
-    unitsWarned: false      // To avoid repeating the >20 units toast
+    currentTransposed: false, // True while the fit-mode transposed grid is rendered
+    unitsWarned: false,     // To avoid repeating the >20 units toast
+    filters: {              // Advanced filters (shared panel + mobile)
+        days: new Set(),        // Empty set = all days
+        startHour: null,        // Course sessions must start >= this hour
+        endHour: null,          // Course sessions must end <= this hour
+        exactHour: null,        // Only courses running at this exact hour
+        professor: '',          // Selected professor (dropdown)
+        units: null,            // Exact unit count, or '3plus' for 3+
+        group: '',              // Substring match (e.g. "40")
+        hasTime: false,         // Only courses with fixed class time
+        onlyAvailable: false,   // Only courses with free capacity
+        sortAsc: null           // null | 'asc' | 'desc' — sort results by name
+    }
 };
 
 /** Active dataset (custom overrides default) */
@@ -71,10 +84,9 @@ function getActiveCourses() {
     return state.customActive ? state.customCourses : state.defaultCourses;
 }
 
-/** Courses listed in pickers: active ones + (disabled) default ones when custom is active */
+/** Courses listed in pickers: only the active dataset (custom fully replaces default) */
 function getListCourses() {
-    if (!state.customActive) return state.defaultCourses;
-    return [...state.customCourses, ...state.defaultCourses];
+    return getActiveCourses();
 }
 
 /** Is a course selectable? */
@@ -97,6 +109,7 @@ const elements = {
     customDataBanner: document.getElementById('customDataBanner'),
 
     // Mobile search
+    searchSection: document.getElementById('searchSection'),
     searchInput: document.getElementById('searchInput'),
     searchClear: document.getElementById('searchClear'),
     searchResults: document.getElementById('searchResults'),
@@ -124,6 +137,8 @@ const elements = {
     btnExportPDF: document.getElementById('btnExportPDF'),
     btnCustomData: document.getElementById('btnCustomData'),
     btnReset: document.getElementById('btnReset'),
+    btnFitTable: document.getElementById('btnFitTable'),
+    btnBannerRestoreDefault: document.getElementById('btnBannerRestoreDefault'),
 
     // Schedule
     scheduleBody: document.getElementById('scheduleBody'),
@@ -157,6 +172,21 @@ const elements = {
     closeCustomDataModal: document.getElementById('closeCustomDataModal'),
     btnLoadCustomData: document.getElementById('btnLoadCustomData'),
     btnRestoreDefault: document.getElementById('btnRestoreDefault'),
+
+    // Advanced filters (rendered into mobile bar + desktop drawer)
+    filterBarMobile: document.getElementById('filterBarMobile'),
+    filterDrawerBar: document.getElementById('filterDrawerBar'),
+
+    // Mobile search modal
+    searchTrigger: document.getElementById('searchTrigger'),
+    searchModal: document.getElementById('searchModal'),
+    searchModalClose: document.getElementById('searchModalClose'),
+
+    // Desktop filter drawer
+    panelFilterToggle: document.getElementById('panelFilterToggle'),
+    panelFilterBadge: document.getElementById('panelFilterBadge'),
+    filterDrawer: document.getElementById('filterDrawer'),
+    filterDrawerClose: document.getElementById('filterDrawerClose'),
 
     // Conflict modal
     conflictModal: document.getElementById('conflictModal'),
@@ -322,6 +352,25 @@ function parseScheduleFromInfo(title) {
 }
 
 /**
+ * Extract weekly sessions from the course-detail tooltip of a row.
+ * Rows with co-professors (اساتید همکار) carry a second img[title] tooltip
+ * without any جلسه info; prefer the one that actually parses.
+ */
+function getCourseSchedule(row) {
+    const titles = Array.from(row.querySelectorAll('img[title]'))
+        .map(img => img.getAttribute('title'));
+    for (const title of titles) {
+        const slots = parseScheduleFromInfo(title);
+        if (slots.length) return slots;
+    }
+    // Fall back to the detail tooltip (course with no fixed class time)
+    for (const title of titles) {
+        if (title && title.includes('coursedetail')) return parseScheduleFromInfo(title);
+    }
+    return [];
+}
+
+/**
  * Parse the portal HTML table (see example.txt) into course objects
  */
 function parseTableData(html) {
@@ -341,14 +390,22 @@ function parseTableData(html) {
 
         const units = parseFloat(cells[4].textContent.trim().replace(/[^\d.]/g, '')) || 0;
 
-        let professor = cells[8] ? cells[8].textContent.replace(/\u00a0/g, ' ').trim() : '';
+        // Professor cell may embed a co-professor tooltip <img>/<font> (اساتید همکار);
+        // strip them so the name stays clean
+        let professor = '';
+        if (cells[8]) {
+            const profClone = cells[8].cloneNode(true);
+            profClone.querySelectorAll('img, font').forEach(el => el.remove());
+            professor = profClone.textContent.replace(/\u00a0/g, ' ').trim();
+        }
         professor = professor.replace(/^-\s*/, '').trim() || 'نامعلوم';
 
         const capacity = cells[6] ? parseInt(cells[6].textContent.trim(), 10) || 0 : 0;
         const registered = cells[5] ? parseInt(cells[5].textContent.trim(), 10) || 0 : 0;
 
-        const infoImg = row.querySelector('img[title]');
-        const schedule = infoImg ? parseScheduleFromInfo(infoImg.getAttribute('title')) : [];
+        // Pick the course-detail tooltip, not the co-professor one (first img[title]
+        // in the row may be the "اساتید همکار" tooltip inside the professor cell)
+        const schedule = getCourseSchedule(row);
 
         const id = `${code}-${group}`;
         if (seen.has(id)) return;
@@ -417,6 +474,312 @@ async function loadLastUpdate() {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// ADVANCED FILTERS UI
+// ═══════════════════════════════════════════════════════════════
+
+const FILTER_HOURS = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
+
+/** List of distinct professors in the active dataset (for the dropdown) */
+function getProfessorOptions() {
+    const names = new Set();
+    getListCourses().forEach(c => {
+        if (c.professor && c.professor !== 'نامعلوم') names.add(c.professor);
+    });
+    return [...names].sort((a, b) => a.localeCompare(b, 'fa'));
+}
+
+/** Shared fields (used by both mobile bar and desktop drawer) */
+function buildFilterFieldsHtml() {
+    const hourOpts = FILTER_HOURS.map(h =>
+        `<option value="${h}">${toPersianNumber(h)}:۰۰</option>`
+    ).join('');
+
+    const unitOpts = [1, 2, 3, 4].map(u =>
+        `<option value="${u}">${toPersianNumber(u)}</option>`
+    ).join('');
+
+    return `
+        <div class="filter-detail-grid">
+            <label class="filter-field">
+                <span>از ساعت</span>
+                <select data-filter="startHour"><option value="">—</option>${hourOpts}</select>
+            </label>
+            <label class="filter-field">
+                <span>تا ساعت</span>
+                <select data-filter="endHour"><option value="">—</option>${hourOpts}</select>
+            </label>
+            <label class="filter-field">
+                <span>ساعت مشخص</span>
+                <select data-filter="exactHour"><option value="">—</option>${hourOpts}</select>
+            </label>
+            <label class="filter-field">
+                <span>استاد</span>
+                <select data-filter="professor"><option value="">همه</option>
+                    ${getProfessorOptions().map(p =>
+                        `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('')}
+                </select>
+            </label>
+            <label class="filter-field">
+                <span>گروه</span>
+                <input type="text" data-filter="group" placeholder="مثلاً ۴۰">
+            </label>
+            <label class="filter-field filter-field-wide">
+                <span>واحد</span>
+                <select data-filter="unitsMin">
+                    <option value="">همه</option>
+                    ${unitOpts}
+                    <option value="3plus">۳ به بالا</option>
+                </select>
+            </label>
+        </div>
+    `;
+}
+
+/**
+ * Build the filter bar markup (identical for panel + mobile).
+ * Structure: toggle row (chips for days / time / professor / units / group /
+ * availability) + collapsible detail area for time/professor/units inputs.
+ */
+function buildFilterBarHtml() {
+    const dayChips = CONFIG.DAYS.map(d =>
+        `<button type="button" class="filter-chip" data-filter="day" data-value="${d}">${d}</button>`
+    ).join('');
+
+    return `
+        <div class="filter-row filter-row-main">
+            <button type="button" class="filter-chip filter-toggle" data-filter="toggle" title="فیلترهای پیشرفته">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                </svg>
+                فیلتر
+                <span class="filter-badge hidden" data-role="badge">۰</span>
+            </button>
+            ${dayChips}
+            <button type="button" class="filter-chip" data-filter="onlyAvailable">ظرفیت آزاد</button>
+            <button type="button" class="filter-chip" data-filter="sort" title="مرتب‌سازی بر اساس نام درس">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 6h13M3 12h9M3 18h5"></path>
+                </svg>
+                <span data-role="sort-label">مرتب‌سازی</span>
+            </button>
+            <button type="button" class="filter-chip filter-clear hidden" data-filter="clear">حذف فیلترها ✕</button>
+        </div>
+
+        <div class="filter-details hidden" data-role="details">
+            ${buildFilterFieldsHtml()}
+        </div>
+    `;
+}
+
+/** Reflect state.filters onto the bar's chips/inputs */
+function syncFilterBar(bar) {
+    if (!bar) return;
+    const f = state.filters;
+
+    bar.querySelectorAll('[data-filter="day"]').forEach(btn => {
+        btn.classList.toggle('active', f.days.has(btn.dataset.value));
+    });
+    bar.querySelector('[data-filter="hasTime"]')?.classList.toggle('active', f.hasTime);
+    bar.querySelector('[data-filter="onlyAvailable"]')?.classList.toggle('active', f.onlyAvailable);
+
+    // Sort chip cycles: none → asc → desc → none
+    const sortBtn = bar.querySelector('[data-filter="sort"]');
+    if (sortBtn) {
+        sortBtn.classList.toggle('active', f.sortAsc != null);
+        const label = sortBtn.querySelector('[data-role="sort-label"]');
+        if (label) {
+            label.textContent = f.sortAsc === 'asc' ? 'صعودی' : f.sortAsc === 'desc' ? 'نزولی' : 'مرتب‌سازی';
+        }
+        sortBtn.dataset.sortState = f.sortAsc || '';
+    }
+
+    const n = countActiveFilters();
+    const badge = bar.querySelector('[data-role="badge"]');
+    if (badge) {
+        badge.textContent = toPersianNumber(n);
+        badge.classList.toggle('hidden', n === 0);
+    }
+
+    bar.querySelector('[data-filter="clear"]')?.classList.toggle('hidden', n === 0);
+
+    const setVal = (sel, val) => {
+        const el = bar.querySelector(sel);
+        if (el) el.value = val == null ? '' : String(val);
+    };
+    setVal('[data-filter="startHour"]', f.startHour);
+    setVal('[data-filter="endHour"]', f.endHour);
+    setVal('[data-filter="exactHour"]', f.exactHour);
+    setVal('[data-filter="unitsMin"]', f.units);
+    const prof = bar.querySelector('[data-filter="professor"]');
+    if (prof && document.activeElement !== prof) prof.value = f.professor;
+    const grp = bar.querySelector('[data-filter="group"]');
+    if (grp && document.activeElement !== grp) grp.value = f.group;
+}
+
+function syncFilterBars() {
+    syncFilterBar(elements.filterBarMobile);
+    syncFilterBar(elements.filterDrawerBar);
+
+    // Header badge on the panel filter button
+    if (elements.panelFilterBadge) {
+        const n = countActiveFilters();
+        elements.panelFilterBadge.textContent = toPersianNumber(n);
+        elements.panelFilterBadge.classList.toggle('hidden', n === 0);
+    }
+}
+
+/** Drawer variant of the filter UI: details always expanded, no toggle chip */
+function buildFilterDrawerHtml() {
+    const dayChips = CONFIG.DAYS.map(d =>
+        `<button type="button" class="filter-chip" data-filter="day" data-value="${d}">${d}</button>`
+    ).join('');
+
+    return `
+        <div class="filter-row filter-row-main">
+            ${dayChips}
+        </div>
+        <div class="filter-row">
+            <button type="button" class="filter-chip" data-filter="onlyAvailable">ظرفیت آزاد</button>
+            <button type="button" class="filter-chip" data-filter="sort" title="مرتب‌سازی بر اساس نام درس">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 6h13M3 12h9M3 18h5"></path>
+                </svg>
+                <span data-role="sort-label">مرتب‌سازی</span>
+            </button>
+            <button type="button" class="filter-chip filter-clear hidden" data-filter="clear">حذف فیلترها ✕</button>
+        </div>
+        <div class="filter-details" data-role="details">
+            ${buildFilterFieldsHtml()}
+        </div>
+    `;
+}
+
+/** Rebuild both filter bars (used on init and when the dataset changes) */
+function rebuildFilterBars() {
+    elements.filterBarMobile.innerHTML = buildFilterBarHtml();
+    elements.filterDrawerBar.innerHTML = buildFilterDrawerHtml();
+    bindFilterBar(elements.filterBarMobile);
+    bindFilterBar(elements.filterDrawerBar);
+    syncFilterBars();
+}
+
+/** Open/close the desktop filter drawer (inline grid column, pushes schedule) */
+function setFilterDrawerOpen(open) {    elements.filterDrawer.classList.toggle('open', open);
+    document.querySelector('.workspace').classList.toggle('drawer-open', open);
+    elements.filterDrawer.setAttribute('aria-hidden', String(!open));
+    elements.panelFilterToggle.classList.toggle('active', open);
+}
+
+function isFilterDrawerOpen() {
+    return elements.filterDrawer.classList.contains('open');
+}
+
+/** Wire events on a filter bar container (called once per bar) */
+function bindFilterBar(bar) {
+    if (!bar) return;
+
+    bar.addEventListener('click', e => {
+        const btn = e.target.closest('[data-filter]');
+        if (!btn) return;
+        const kind = btn.dataset.filter;
+
+        if (kind === 'toggle') {
+            bar.querySelector('[data-role="details"]').classList.toggle('hidden');
+            btn.classList.toggle('open');
+            return;
+        }
+
+        if (kind === 'clear') {
+            state.filters = {
+                days: new Set(), startHour: null, endHour: null,
+                exactHour: null, professor: '', units: null,
+                group: '', hasTime: false, onlyAvailable: false, sortAsc: null
+            };
+            syncFilterBars();
+            refreshLists();
+            return;
+        }
+
+        if (kind === 'day') {
+            const d = btn.dataset.value;
+            state.filters.days.has(d) ? state.filters.days.delete(d) : state.filters.days.add(d);
+        } else if (kind === 'hasTime') {
+            state.filters.hasTime = !state.filters.hasTime;
+        } else if (kind === 'onlyAvailable') {
+            state.filters.onlyAvailable = !state.filters.onlyAvailable;
+        } else if (kind === 'sort') {
+            // Cycle: none → asc → desc → none
+            state.filters.sortAsc = state.filters.sortAsc === 'asc'
+                ? 'desc' : state.filters.sortAsc === 'desc' ? null : 'asc';
+        }
+
+        syncFilterBars();
+        refreshLists();
+    });
+
+    bar.addEventListener('change', e => {
+        const el = e.target.closest('[data-filter]');
+        if (!el) return;
+        const kind = el.dataset.filter;
+        const raw = el.value.trim();
+        const num = raw === '' ? null : parseInt(raw, 10);
+
+        if (kind === 'startHour') {
+            state.filters.startHour = num;
+            // Range and exact-hour filters are mutually exclusive
+            if (num != null) {
+                state.filters.exactHour = null;
+                syncFilterBars();
+            }
+        }
+        else if (kind === 'endHour') {
+            state.filters.endHour = num;
+            if (num != null) {
+                state.filters.exactHour = null;
+                syncFilterBars();
+            }
+        }
+        else if (kind === 'exactHour') {
+            state.filters.exactHour = num;
+            if (num != null) {
+                state.filters.startHour = null;
+                state.filters.endHour = null;
+                syncFilterBars();
+            }
+        }
+        else if (kind === 'unitsMin') {
+            // "3plus" = 3 units or more, otherwise an exact count
+            state.filters.units = raw === '3plus' ? '3plus' : num;
+        }
+
+        syncFilterBars();
+        refreshLists();
+    });
+
+    bar.addEventListener('input', e => {
+        const el = e.target.closest('[data-filter]');
+        if (!el) return;
+        const kind = el.dataset.filter;
+
+        if (kind === 'professor') {
+            // Professor is a <select> now — fires on change, not input
+            state.filters.professor = el.value;
+            syncFilterBars();
+        } else if (kind === 'group') state.filters.group = el.value;
+        else return;
+
+        // Mirror text into the sibling bars without re-rendering this one
+        const siblings = [elements.filterBarMobile, elements.filterDrawerBar]
+            .filter(b => b && b !== bar);
+        for (const other of siblings) {
+            const twin = other.querySelector(`[data-filter="${kind}"]`);
+            if (twin && document.activeElement !== twin) twin.value = el.value;
+        }
+        refreshLists();
+    });
+}
+
+// ═══════════════════════════════════════════════════════════════
 // LOCAL STORAGE
 // ═══════════════════════════════════════════════════════════════
 
@@ -470,6 +833,16 @@ function pruneSelections(courses) {
     saveToStorage();
 }
 
+/** True when the viewport is phone-sized (same breakpoint as CSS media queries) */
+function isMobileViewport() {
+    return window.matchMedia('(max-width: 1023px)').matches;
+}
+
+/** True while the fullscreen fit-mode overlay is active */
+function isFitMode() {
+    return elements.scheduleContainer.classList.contains('fit-mode');
+}
+
 // ═══════════════════════════════════════════════════════════════
 // SEARCH & PANEL LIST
 // ═══════════════════════════════════════════════════════════════
@@ -481,16 +854,116 @@ function matchesQuery(course, q) {
         || String(course.group).includes(q);
 }
 
+/** Is any advanced filter active? */
+function hasActiveFilters() {
+    const f = state.filters;
+    return f.days.size > 0
+        || f.startHour != null || f.endHour != null
+        || f.exactHour != null
+        || f.professor !== ''
+        || f.units != null
+        || f.group.trim() !== ''
+        || f.hasTime || f.onlyAvailable
+        || f.sortAsc != null;
+}
+
+/** Count of active filter dimensions (for badge) */
+function countActiveFilters() {
+    const f = state.filters;
+    let n = 0;
+    if (f.days.size) n++;
+    if (f.startHour != null || f.endHour != null) n++;
+    if (f.exactHour != null) n++;
+    if (f.professor) n++;
+    if (f.units != null) n++;
+    if (f.group.trim()) n++;
+    if (f.hasTime) n++;
+    if (f.onlyAvailable) n++;
+    return n;
+}
+
+/** Does the course satisfy all advanced filters? */
+function matchesFilters(course) {
+    const f = state.filters;
+
+    if (f.hasTime && !course.schedule.length) return false;
+
+    if (f.onlyAvailable) {
+        const remaining = course.capacity - course.registered;
+        if (course.capacity > 0 && remaining <= 0) return false;
+        if (course.capacity === 0) return false;
+    }
+
+    if (f.days.size) {
+        if (!course.schedule.length) return false;
+        if (!course.schedule.some(s => f.days.has(s.day))) return false;
+    }
+
+    // Range filter: every session must lie fully inside [start, end].
+    if (f.startHour != null || f.endHour != null) {
+        if (!course.schedule.length) return false;
+        const lo = f.startHour != null ? f.startHour : 7;
+        const hi = f.endHour != null ? f.endHour : 20;
+        const ok = course.schedule.every(s => {
+            const st = parseTime(s.start);
+            const en = parseTime(s.end);
+            return st >= lo && en <= hi;
+        });
+        if (!ok) return false;
+    }
+
+    // Exact-hour filter: at least one session runs during this hour
+    if (f.exactHour != null) {
+        if (!course.schedule.length) return false;
+        const ok = course.schedule.some(s => {
+            const st = parseTime(s.start);
+            const en = parseTime(s.end);
+            return st <= f.exactHour && en > f.exactHour;
+        });
+        if (!ok) return false;
+    }
+
+    if (f.professor && course.professor !== f.professor) return false;
+
+    if (f.units != null) {
+        if (f.units === '3plus') {
+            if (course.units < 3) return false;
+        } else if (course.units !== f.units) return false;
+    }
+
+    if (f.group.trim() && !String(course.group).includes(f.group.trim())) return false;
+
+    return true;
+}
+
+/** Sort the course list by name (asc/desc) per state.filters.sortAsc */
+function sortCourses(courses) {
+    const dir = state.filters.sortAsc;
+    if (!dir) return courses;
+    const sorted = [...courses].sort((a, b) => a.name.localeCompare(b.name, 'fa'));
+    return dir === 'asc' ? sorted : sorted.reverse();
+}
+
 function filterCourses(query) {
     const normalizedQuery = (query || '').trim();
-    if (!normalizedQuery) {
-        return { list: getListCourses(), initial: true };
+    let list = getListCourses();
+
+    if (hasActiveFilters()) {
+        list = list.filter(matchesFilters);
     }
-    // Normalize Persian digits in query to latin
-    const q = normalizedQuery
-        .replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))
-        .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
-    return { list: getListCourses().filter(c => matchesQuery(c, q)), initial: false };
+
+    if (normalizedQuery) {
+        // Normalize Persian digits in query to latin
+        const q = normalizedQuery
+            .replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))
+            .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+        list = list.filter(c => matchesQuery(c, q));
+    }
+
+    list = sortCourses(list);
+
+    const filtered = hasActiveFilters();
+    return { list, initial: !normalizedQuery && !filtered };
 }
 
 function scheduleTagsHtml(course) {
@@ -565,7 +1038,7 @@ function renderSearchResults(courses, isInitial) {
 
     elements.resultsCount.textContent = isInitial
         ? `${toPersianNumber(courses.length)} درس ارائه‌شده`
-        : `${toPersianNumber(courses.length)} نتیجه`;
+        : `${toPersianNumber(courses.length)} نتیجه${hasActiveFilters() ? ' (فیلتر شده)' : ''}`;
 
     elements.resultsList.innerHTML = courses.map(courseCardHtml).join('');
     bindCardButtons(elements.resultsList);
@@ -574,12 +1047,25 @@ function renderSearchResults(courses, isInitial) {
 function showSearchResults(isInitial = false) {
     const { list, initial } = filterCourses(elements.searchInput.value);
     renderSearchResults(list, isInitial && initial);
-    elements.searchResults.classList.add('active');
     elements.searchClear.classList.add('visible');
 }
 
-function hideSearchResults() {
-    setTimeout(() => elements.searchResults.classList.remove('active'), 200);
+/* Mobile search modal: open/close (results always visible inside) */
+function setSearchModalOpen(open) {
+    elements.searchModal.classList.toggle('active', open);
+    document.body.classList.toggle('modal-open', open);
+    if (open) {
+        showSearchResults(true);
+        setTimeout(() => elements.searchInput.focus(), 250);
+    } else {
+        elements.searchInput.value = '';
+        elements.searchClear.classList.remove('visible');
+        showSearchResults(true);
+    }
+}
+
+function isSearchModalOpen() {
+    return elements.searchModal.classList.contains('active');
 }
 
 /** Desktop panel list */
@@ -587,7 +1073,7 @@ function renderPanelList() {
     const { list } = filterCourses(elements.panelSearch.value);
 
     elements.panelCount.textContent = toPersianNumber(
-        `${state.selectedCourses.length}/${state.defaultCourses.length + state.customCourses.length}`
+        `${state.selectedCourses.length}/${getListCourses().length}`
     );
 
     if (!list.length) {
@@ -597,7 +1083,7 @@ function renderPanelList() {
                     <circle cx="11" cy="11" r="8"></circle>
                     <path d="m21 21-4.35-4.35"></path>
                 </svg>
-                <p>نتیجه‌ای یافت نشد</p>
+                <p>${hasActiveFilters() ? 'درسی با این فیلترها یافت نشد' : 'نتیجه‌ای یافت نشد'}</p>
             </div>`;
         return;
     }
@@ -609,7 +1095,7 @@ function renderPanelList() {
 /** Refresh every course list view */
 function refreshLists() {
     renderPanelList();
-    if (elements.searchResults.classList.contains('active')) {
+    if (isSearchModalOpen() || elements.searchResults.classList.contains('active')) {
         const { list, initial } = filterCourses(elements.searchInput.value);
         renderSearchResults(list, initial && !elements.searchInput.value.trim());
     }
@@ -679,7 +1165,11 @@ function removeCourse(courseId) {
     updateSummary();
     refreshLists();
     renderSchedule();
+
+    // Keep the search modal open; close other modals (course info etc.)
+    const searchWasOpen = isSearchModalOpen();
     closeAllModals();
+    if (searchWasOpen) setSearchModalOpen(true);
 
     if (course) showToast(`درس "${course.name}" حذف شد`, 'info');
 }
@@ -724,13 +1214,23 @@ function updateSummary() {
 
 function initializeScheduleTable() {
     state.currentHours = CONFIG.HOURS;
+    state.currentTransposed = false;
     buildScheduleTable(CONFIG.HOURS);
 }
 
 function renderSchedule() {
+    // Phone-sized viewports use the transposed grid (hours as rows) so the
+    // table stays narrow and readable — same orientation as fit-mode
+    if (isMobileViewport() && !isFitMode()) {
+        renderTransposedSchedule();
+        return;
+    }
+
     const hours = getScheduleHours();
-    if (JSON.stringify(hours) !== JSON.stringify(state.currentHours)) {
+    if (JSON.stringify(hours) !== JSON.stringify(state.currentHours) ||
+        state.currentTransposed) {
         state.currentHours = hours;
+        state.currentTransposed = false;
         buildScheduleTable(hours);
     }
 
@@ -835,9 +1335,13 @@ function renderCourseBlock(course, slot) {
     const duration = endTime - startTime;
     if (duration <= 0) return;
 
-    const startCell = elements.scheduleBody.querySelector(
-        `tr[data-day="${slot.day}"] td[data-hour="${startHour}"]`
-    );
+    // Normal grid: day rows / hour columns. Transposed (fit-mode) grid:
+    // hour rows / day columns — the selectors mirror the grid orientation
+    const startCell = state.currentTransposed
+        ? elements.scheduleBody.querySelector(
+            `tr[data-hour="${startHour}"] td[data-day="${slot.day}"]`)
+        : elements.scheduleBody.querySelector(
+            `tr[data-day="${slot.day}"] td[data-hour="${startHour}"]`);
     if (!startCell) return;
 
     const block = document.createElement('div');
@@ -845,11 +1349,23 @@ function renderCourseBlock(course, slot) {
     block.style.backgroundColor = course.color;
     block.dataset.courseId = getCourseId(course);
 
-    // RTL: time flows right-to-left, anchor to the RIGHT edge of the cell
-    const offsetPercent = ((startTime - startHour) / 1) * 100;
-
-    block.style.right = `${offsetPercent}%`;
-    block.style.width = `${duration * 100}%`;
+    if (state.currentTransposed) {
+        // Transposed grid: days are columns, hours are rows — the block must
+        // span ROWS vertically (one row per hour) instead of columns sideways
+        const ROW_H = 46; // 44px cell height + 2px border-spacing (matches CSS)
+        const yPos = (t) => Math.floor(t) * ROW_H + (t % 1) * (ROW_H - 2);
+        block.style.left = '0';
+        block.style.right = '0';
+        block.style.width = 'auto';
+        block.style.top = `${3 + (yPos(startTime) - startHour * ROW_H)}px`;
+        block.style.height = `${yPos(endTime) - yPos(startTime) - 6}px`;
+    } else {
+        // Normal grid: RTL, time flows right-to-left — anchor to the RIGHT
+        // edge of the cell and stretch leftwards across the covered hours
+        const offsetPercent = ((startTime - startHour) / 1) * 100;
+        block.style.right = `${offsetPercent}%`;
+        block.style.width = `${duration * 100}%`;
+    }
 
     block.innerHTML = `
         <span class="course-block-name">${escapeHtml(course.name)}</span>
@@ -859,6 +1375,86 @@ function renderCourseBlock(course, slot) {
 
     block.addEventListener('click', () => showCourseModal(course));
     startCell.appendChild(block);
+}
+
+// ── Transposed fit-mode grid ────────────────────────────────────
+// Mobile fullscreen: hours as rows, days as columns. The table becomes
+// tall and narrow so it fits the phone width without horizontal scroll.
+// Empty hour rows collapse to a slim strip; empty day columns stay narrow.
+
+const DAY_SHORT = { 'شنبه': 'ش', 'یکشنبه': 'ی', 'دوشنبه': 'د', 'سه‌شنبه': 'س', 'چهارشنبه': 'چ', 'پنجشنبه': 'پ' };
+
+/** Union of base hours + selected-course hours, in the transposed grid */
+function getTransposedHours() {
+    return getScheduleHours();
+}
+
+function buildTransposedTable(hours) {
+    const theadRow = elements.scheduleTable.querySelector('.time-header');
+    // RTL row: time label first (right), then days right-to-left
+    theadRow.innerHTML = '<th class="day-header hour-col-header">ساعت / روز</th>' +
+        CONFIG.DAYS.map(d => `<th class="day-col-header">${DAY_SHORT[d] || d}</th>`).join('');
+
+    elements.scheduleBody.innerHTML = '';
+
+    hours.forEach(hour => {
+        const row = document.createElement('tr');
+        row.className = 'day-row hour-row';
+        row.dataset.hour = hour;
+
+        const timeCell = document.createElement('th');
+        timeCell.textContent = `${String(hour).padStart(2, '0')}:00`;
+        timeCell.className = 'hour-label';
+        row.appendChild(timeCell);
+
+        CONFIG.DAYS.forEach(day => {
+            const cell = document.createElement('td');
+            cell.dataset.hour = hour;
+            cell.dataset.day = day;
+            row.appendChild(cell);
+        });
+
+        elements.scheduleBody.appendChild(row);
+    });
+
+    // Extra row: courses without fixed class time
+    const notimeRow = document.createElement('tr');
+    notimeRow.className = 'day-row notime-row';
+    const notimeTh = document.createElement('th');
+    notimeTh.textContent = 'سایر';
+    notimeTh.className = 'hour-label';
+    notimeRow.appendChild(notimeTh);
+    const notimeCell = document.createElement('td');
+    notimeCell.colSpan = CONFIG.DAYS.length;
+    notimeCell.className = 'notime-cell';
+    notimeRow.appendChild(notimeCell);
+    elements.scheduleBody.appendChild(notimeRow);
+}
+
+function renderTransposedSchedule() {
+    const hours = getTransposedHours();
+    if (JSON.stringify(hours) !== JSON.stringify(state.currentHours) ||
+        !state.currentTransposed) {
+        state.currentHours = hours;
+        state.currentTransposed = true;
+        buildTransposedTable(hours);
+    }
+
+    elements.scheduleBody.querySelectorAll('.course-block').forEach(el => el.remove());
+
+    state.selectedCourses.forEach(courseId => {
+        const course = findCourseById(courseId);
+        if (!course) return;
+        course.schedule.forEach(slot => renderCourseBlock(course, slot));
+    });
+
+    // Collapse hour rows that have no course block in any day cell
+    elements.scheduleBody.querySelectorAll('tr.hour-row').forEach(row => {
+        const hasBlock = [...row.querySelectorAll('td')].some(td => td.children.length);
+        row.classList.toggle('empty-row', !hasBlock);
+    });
+
+    renderNotimeChips();
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -974,6 +1570,7 @@ function renderSelectedList() {
 function closeAllModals() {
     document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('active'));
     state.currentModalCourse = null;
+    if (isSearchModalOpen()) setSearchModalOpen(false);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1004,12 +1601,14 @@ function applyCustomData(text, { silent = false } = {}) {
     state.customActive = true;
     saveCustomData(text);
 
-    // Old (default) selections are no longer valid
-    pruneSelections(state.customCourses);
-    state.unitsWarned = getTotalUnits() > CONFIG.MAX_UNITS;
+    // Dataset replaced: wipe all previous selections so the schedule starts clean
+    state.selectedCourses = [];
+    saveToStorage();
+    state.unitsWarned = false;
 
     updateSummary();
     updateCustomDataStatus();
+    rebuildFilterBars(); // professor dropdown + options follow the new dataset
     refreshLists();
     renderSchedule();
 
@@ -1022,11 +1621,15 @@ function restoreDefaultData() {
     state.customActive = false;
     clearCustomData();
 
-    pruneSelections(state.defaultCourses);
-    state.unitsWarned = getTotalUnits() > CONFIG.MAX_UNITS;
+    // Dataset replaced: wipe all selections so the schedule starts clean,
+    // same as applyCustomData — stale default selections must not survive
+    state.selectedCourses = [];
+    saveToStorage();
+    state.unitsWarned = false;
 
     updateSummary();
     updateCustomDataStatus();
+    rebuildFilterBars();
     refreshLists();
     renderSchedule();
     showToast('به دیتای پیش‌فرض بازگشتید', 'info');
@@ -1050,19 +1653,19 @@ async function exportPDF() {
 
         const { jsPDF } = window.jspdf;
 
-        // Light wrapper so the table is exported dark-on-white regardless of theme
+        // Dark wrapper so the exported PDF matches the app's dark theme
         const wrapper = document.createElement('div');
-        wrapper.className = 'light-mode';
+        wrapper.className = 'dark-mode';
         wrapper.style.cssText = `
             position: fixed; left: -9999px; top: 0; width: 1320px;
-            padding: 24px; background: #ffffff;
+            padding: 24px; background: #0a0a0a; color: #ffffff;
             font-family: 'Vazirmatn', sans-serif; direction: rtl;`;
 
         const totalUnits = getTotalUnits();
         wrapper.innerHTML = `
             <div style="text-align: center; margin-bottom: 14px;">
-                <h1 style="font-size: 22px; margin: 0 0 6px;">پیش‌انتخاب واحد - جدول زمان‌بندی</h1>
-                <p style="font-size: 12px; color: #666; margin: 0;">
+                <h1 style="font-size: 22px; margin: 0 0 6px; color: #ffffff;">پیش‌انتخاب واحد - جدول زمان‌بندی</h1>
+                <p style="font-size: 12px; color: #a0a0a0; margin: 0;">
                     تاریخ: ${new Date().toLocaleDateString('fa-IR')}
                     | تعداد درس: ${toPersianNumber(state.selectedCourses.length)}
                     | جمع واحد: ${formatUnits(totalUnits)}
@@ -1079,8 +1682,23 @@ async function exportPDF() {
         document.body.appendChild(wrapper);
         await new Promise(r => setTimeout(r, 200));
 
+        // Snapshot resolved colors AFTER the wrapper is attached and laid out
+        // (getComputedStyle returns nothing on detached nodes, which would
+        // also strip the inline course-block / chip colors)
+        tableClone.querySelectorAll('*').forEach(el => {
+            const cs = getComputedStyle(el);
+            el.style.backgroundColor = cs.backgroundColor;
+            el.style.color = cs.color;
+            el.style.borderColor = cs.borderColor;
+        });
+
+        // html2canvas renders inline-block chips more reliably than inline-flex
+        tableClone.querySelectorAll('.notime-chip').forEach(chip => {
+            chip.style.display = 'inline-block';
+        });
+
         const canvas = await html2canvas(wrapper, {
-            backgroundColor: '#ffffff',
+            backgroundColor: '#0a0a0a',
             scale: 2,
             useCORS: true,
             allowTaint: true
@@ -1205,17 +1823,19 @@ function loadTheme() {
 // ═══════════════════════════════════════════════════════════════
 
 function setupEventListeners() {
-    // Mobile search
-    elements.searchInput.addEventListener('input', () => showSearchResults(false));
-    elements.searchInput.addEventListener('focus', () => {
-        showSearchResults(!elements.searchInput.value.trim());
+    // Mobile search modal
+    elements.searchTrigger.addEventListener('click', () => setSearchModalOpen(true));
+    elements.searchModalClose.addEventListener('click', () => setSearchModalOpen(false));
+    elements.searchModal.addEventListener('click', (e) => {
+        if (e.target === elements.searchModal) setSearchModalOpen(false);
     });
-    elements.searchInput.addEventListener('blur', hideSearchResults);
+
+    // Live search inside the modal (results list is always visible there)
+    elements.searchInput.addEventListener('input', () => showSearchResults(false));
 
     elements.searchClear.addEventListener('click', () => {
         elements.searchInput.value = '';
-        elements.searchResults.classList.remove('active');
-        elements.searchClear.classList.remove('visible');
+        showSearchResults(true);
         elements.searchInput.focus();
     });
 
@@ -1227,6 +1847,10 @@ function setupEventListeners() {
         elements.panelSearch.focus();
     });
 
+    // Desktop filter drawer (filters apply live — no apply button)
+    elements.panelFilterToggle.addEventListener('click', () => setFilterDrawerOpen(!isFilterDrawerOpen()));
+    elements.filterDrawerClose.addEventListener('click', () => setFilterDrawerOpen(false));
+
     // Controls
     elements.btnViewList.addEventListener('click', () => {
         renderSelectedList();
@@ -1235,6 +1859,75 @@ function setupEventListeners() {
     elements.btnCopyTable.addEventListener('click', copyToClipboard);
     elements.btnExportPDF.addEventListener('click', exportPDF);
     elements.btnReset.addEventListener('click', resetSchedule);
+
+    // Fit-whole-table toggle (mobile screenshot helper): schedule container
+    // goes fullscreen with a transposed grid (hours as rows) that fits width
+    const exitFitMode = () => {
+        if (!elements.scheduleContainer.classList.contains('fit-mode')) return;
+        elements.scheduleContainer.classList.remove('fit-mode');
+        elements.btnFitTable.classList.remove('active');
+        elements.btnFitTable.setAttribute('aria-pressed', 'false');
+        document.body.style.overflow = '';
+        window.removeEventListener('resize', fitOnResize);
+        renderSchedule(); // mobile: keeps transposed grid; desktop: day rows
+    };
+
+    const applyFitScale = () => {
+        // Transposed grid is narrow (8 columns) — usually no scale needed;
+        // still scale down on ultra-narrow screens so nothing is cut off
+        const table = elements.scheduleContainer.querySelector('.schedule-table');
+        const natural = table ? table.offsetWidth : 0;
+        if (!natural || window.innerWidth < 40) return;
+        const scale = Math.max(0.25, Math.min(1, (window.innerWidth - 8) / natural));
+        if (scale < 1) {
+            elements.scheduleContainer.style.setProperty('--fit-scale', String(scale));
+        } else {
+            elements.scheduleContainer.style.removeProperty('--fit-scale');
+        }
+    };
+
+    const fitOnResize = () => applyFitScale();
+
+    elements.btnFitTable.addEventListener('click', () => {
+        const active = elements.scheduleContainer.classList.toggle('fit-mode');
+        elements.btnFitTable.classList.toggle('active', active);
+        elements.btnFitTable.setAttribute('aria-pressed', String(active));
+
+        if (active) {
+            document.body.style.overflow = 'hidden';
+            renderTransposedSchedule(); // swap to hours-as-rows grid
+            applyFitScale();
+            window.addEventListener('resize', fitOnResize);
+        } else {
+            exitFitMode();
+        }
+    });
+
+    // Rotating the phone crosses the 1024px breakpoint: rebuild the grid in
+    // the orientation that matches the new viewport (mobile = transposed).
+    // matchMedia change events proved flaky under viewport emulation, so
+    // resolve the orientation on every resize instead.
+    const onViewportChange = () => {
+        if (isFitMode()) return; // fit-mode always renders transposed anyway
+        const mobile = isMobileViewport();
+        if (mobile !== state.currentTransposed) renderSchedule();
+    };
+    window.addEventListener('resize', onViewportChange);
+
+    // Tap anywhere on the fullscreen overlay (outside the table) exits fit mode
+    elements.scheduleContainer.addEventListener('click', (e) => {
+        if (elements.scheduleContainer.classList.contains('fit-mode') &&
+            !e.target.closest('.schedule-table') &&
+            !e.target.closest('.fit-table-btn') &&
+            !e.target.closest('.fit-close-btn')) {
+            exitFitMode();
+        }
+    });
+
+    document.getElementById('btnFitClose').addEventListener('click', exitFitMode);
+
+    // External restore-default button in the custom-data banner
+    elements.btnBannerRestoreDefault.addEventListener('click', restoreDefaultData);
 
     // Custom data modal
     elements.btnCustomData.addEventListener('click', () => {
@@ -1284,7 +1977,21 @@ function setupEventListeners() {
 
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') closeAllModals();
+        if (e.key === 'Escape') {
+            if (isFilterDrawerOpen()) {
+                setFilterDrawerOpen(false);
+            } else {
+                closeAllModals();
+            }
+        }
+    });
+
+    // Reset search state when the mobile modal closes
+    elements.searchModal.addEventListener('transitionend', () => {
+        if (!isSearchModalOpen()) {
+            elements.searchInput.value = '';
+            showSearchResults(true);
+        }
     });
 }
 
@@ -1326,6 +2033,11 @@ async function init() {
     updateSummary();
     updateCustomDataStatus();
     renderPanelList();
+    renderSchedule();
+
+    // Build advanced filter bars (mobile search + desktop drawer)
+    rebuildFilterBars();
+
     setupEventListeners();
 
     console.log('Initialization complete!');

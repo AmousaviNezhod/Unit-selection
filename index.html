@@ -72,39 +72,25 @@
                 <line x1="12" y1="17" x2="12.01" y2="17"></line>
             </svg>
             <span>به دلیل ورود دیتا دستی، از دیتای اصلی سایت نمی‌توانید استفاده کنید</span>
+            <button class="banner-reset-btn" id="btnBannerRestoreDefault" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="1 4 1 10 7 10"></polyline>
+                    <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+                </svg>
+                بازگشت به دیتای پیش‌فرض
+            </button>
         </div>
 
-        <!-- ===== MOBILE SEARCH (hidden on desktop) ===== -->
+        <!-- ===== MOBILE SEARCH TRIGGER (opens the search modal, hidden on desktop) ===== -->
         <section class="search-section" id="searchSection">
-            <div class="search-container">
-                <div class="search-input-wrapper">
-                    <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="11" cy="11" r="8"></circle>
-                        <path d="m21 21-4.35-4.35"></path>
-                    </svg>
-                    <input
-                        type="text"
-                        id="searchInput"
-                        class="search-input"
-                        placeholder="جستجوی درس یا استاد..."
-                        autocomplete="off"
-                    >
-                    <button class="search-clear" id="searchClear" aria-label="پاک کردن">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="18" y1="6" x2="6" y2="18"></line>
-                            <line x1="6" y1="6" x2="18" y2="18"></line>
-                        </svg>
-                    </button>
-                </div>
-
-                <!-- Search Results Dropdown -->
-                <div class="search-results" id="searchResults">
-                    <div class="results-header">
-                        <span class="results-count" id="resultsCount"></span>
-                    </div>
-                    <div class="results-list" id="resultsList"></div>
-                </div>
-            </div>
+            <button type="button" class="search-trigger" id="searchTrigger" aria-haspopup="dialog">
+                <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                </svg>
+                <span class="search-trigger-text">جستجوی درس، استاد یا کد...</span>
+                <span class="search-trigger-hint">جستجو و فیلتر</span>
+            </button>
         </section>
 
         <!-- ===== SUMMARY + CONTROLS ===== -->
@@ -177,6 +163,20 @@
         <!-- ===== WORKSPACE: PANEL (DESKTOP) + SCHEDULE ===== -->
         <div class="workspace">
 
+            <!-- Advanced filter drawer (opens to the right of the panel, pushes the schedule) -->
+            <aside class="filter-drawer" id="filterDrawer" aria-hidden="true">
+                <div class="filter-drawer-header">
+                    <h4 class="filter-drawer-title">فیلترهای پیشرفته</h4>
+                    <button class="filter-drawer-close" id="filterDrawerClose" aria-label="بستن">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+                <div class="filter-drawer-body" id="filterDrawerBar"><!-- Filled by JS --></div>
+            </aside>
+
             <!-- Desktop side panel -->
             <aside class="courses-panel" id="coursesPanel">
                 <div class="panel-header">
@@ -196,6 +196,12 @@
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
+                    <button class="panel-filter-toggle" id="panelFilterToggle" aria-label="فیلترهای پیشرفته" title="فیلترهای پیشرفته">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                        </svg>
+                        <span class="panel-filter-badge hidden" id="panelFilterBadge">۰</span>
+                    </button>
                 </div>
 
                 <div class="panel-list" id="panelList">
@@ -208,6 +214,13 @@
                 <div class="schedule-container" id="scheduleContainer">
                     <div class="schedule-header">
                         <h2 class="schedule-title">جدول زمان‌بندی</h2>
+                        <button class="fit-close-btn" id="btnFitClose" type="button" aria-label="بستن تمام‌صفحه">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                            بستن
+                        </button>
                         <div class="units-flag" id="unitsFlag">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
@@ -216,6 +229,15 @@
                             </svg>
                             <span id="unitsFlagText">جمع واحدها از ۲۰ واحد مجاز بیشتر شده است!</span>
                         </div>
+                        <button class="fit-table-btn" id="btnFitTable" title="نمایش کل جدول در صفحه" aria-pressed="false">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="3 9 3 3 9 3"></polyline>
+                                <polyline points="15 3 21 3 21 9"></polyline>
+                                <polyline points="21 15 21 21 15 21"></polyline>
+                                <polyline points="9 21 3 21 3 15"></polyline>
+                            </svg>
+                            <span class="fit-table-text">کل جدول</span>
+                        </button>
                     </div>
 
                     <div class="table-wrapper">
@@ -260,6 +282,50 @@
     </footer>
 
     <!-- ==================== MODALS ==================== -->
+
+    <!-- Mobile Search & Filter Modal -->
+    <div class="modal-overlay search-modal-overlay" id="searchModal">
+        <div class="search-modal" role="dialog" aria-modal="true" aria-label="جستجو و فیلتر دروس">
+            <div class="search-modal-header">
+                <div class="search-input-wrapper">
+                    <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="m21 21-4.35-4.35"></path>
+                    </svg>
+                    <input
+                        type="text"
+                        id="searchInput"
+                        class="search-input"
+                        placeholder="جستجوی درس یا استاد..."
+                        autocomplete="off"
+                    >
+                    <button class="search-clear" id="searchClear" aria-label="پاک کردن">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+                <button class="search-modal-close" id="searchModalClose" aria-label="بستن">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Advanced filters (shared, mobile) -->
+            <div class="filter-bar" id="filterBarMobile"><!-- Filled by JS --></div>
+
+            <!-- Search Results -->
+            <div class="search-results" id="searchResults">
+                <div class="results-header">
+                    <span class="results-count" id="resultsCount"></span>
+                </div>
+                <div class="results-list" id="resultsList"></div>
+            </div>
+        </div>
+    </div>
 
     <!-- Course Info Modal -->
     <div class="modal-overlay" id="courseModal">
@@ -322,6 +388,7 @@
                 <p class="custom-data-hint">
                     کد HTML جدول دروس (مشابه خروجی سایت آموزش / فایل <span class="code-hint">example.txt</span>) را در کادر زیر قرار دهید.
                     پس از بارگذاری، لیست دروس از دیتای جدید ساخته می‌شود و دیتای پیش‌فرض غیرفعال خواهد شد.
+                    <strong class="custom-data-warning">توجه: با بارگذاری دیتای جدید، تمام دروس انتخاب‌شده‌ی قبلی حذف و جدول زمان‌بندی از ابتدا ریست می‌شود.</strong>
                 </p>
                 <textarea id="customDataInput" class="custom-data-textarea" dir="ltr" spellcheck="false" placeholder="&lt;table&gt;...&lt;/table&gt;"></textarea>
                 <div class="custom-data-status" id="customDataStatus"></div>
