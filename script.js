@@ -190,6 +190,7 @@ const elements = {
     btnCopyTable: document.getElementById('btnCopyTable'),
     btnExportPDF: document.getElementById('btnExportPDF'),
     btnCustomData: document.getElementById('btnCustomData'),
+    btnShareLink: document.getElementById('btnShareLink'),
     btnReset: document.getElementById('btnReset'),
     btnFitTable: document.getElementById('btnFitTable'),
     btnBannerRestoreDefault: document.getElementById('btnBannerRestoreDefault'),
@@ -199,6 +200,7 @@ const elements = {
     btnCopyTableM: document.getElementById('btnCopyTableM'),
     btnExportPDFM: document.getElementById('btnExportPDFM'),
     btnCustomDataM: document.getElementById('btnCustomDataM'),
+    btnShareLinkM: document.getElementById('btnShareLinkM'),
     btnResetM: document.getElementById('btnResetM'),
 
     // Schedule
@@ -2028,6 +2030,65 @@ async function copyToClipboard() {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// SHARE VIA LINK (URL hash)
+// ═══════════════════════════════════════════════════════════════
+
+/** Encode selected course IDs into the URL hash (shareable link) */
+function buildShareLink() {
+    const payload = JSON.stringify({ c: state.selectedCourses });
+    const encoded = btoa(unescape(encodeURIComponent(payload))); // UTF-8 safe base64
+    return `${location.origin}${location.pathname}#${encoded}`;
+}
+
+/** Copy a share link (URL #hash with selected course IDs) to the clipboard */
+async function shareSchedule() {
+    if (state.selectedCourses.length === 0) {
+        showToast('برنامه خالی است', 'warning');
+        return;
+    }
+
+    const link = buildShareLink();
+    try {
+        if (navigator.share) {
+            // Mobile: native share sheet (can also send the link via apps)
+            await navigator.share({ title: 'برنامه هفتگی من', url: link });
+            return;
+        }
+        await navigator.clipboard.writeText(link);
+        showToast('لینک برنامه کپی شد', 'success');
+    } catch (error) {
+        if (error && error.name === 'AbortError') return; // user closed share sheet
+        try {
+            await navigator.clipboard.writeText(link);
+            showToast('لینک برنامه کپی شد', 'success');
+        } catch (e) {
+            console.error('Error sharing link:', e);
+            showToast('خطا در ساخت لینک', 'error');
+        }
+    }
+}
+
+/** Restore selections from a share link's #hash (returns true when applied) */
+function restoreFromHash() {
+    if (!location.hash || location.hash.length < 2) return false;
+    try {
+        const payload = JSON.parse(decodeURIComponent(escape(atob(location.hash.slice(1)))));
+        const ids = Array.isArray(payload.c) ? payload.c.filter(id => typeof id === 'string') : [];
+        const valid = ids.filter(id => findCourseById(id));
+        if (!valid.length) return false;
+
+        state.selectedCourses = valid;
+        saveToStorage();
+        // Strip the hash so a refresh doesn't re-import the shared list
+        history.replaceState(null, '', location.pathname + location.search);
+        return true;
+    } catch (error) {
+        console.error('Invalid share link:', error);
+        return false;
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
 // TOAST NOTIFICATIONS
 // ═══════════════════════════════════════════════════════════════
 
@@ -2121,6 +2182,7 @@ function setupEventListeners() {
         elements.listModal.classList.add('active');
     });
     elements.btnCopyTable.addEventListener('click', copyToClipboard);
+    elements.btnShareLink.addEventListener('click', shareSchedule);
     elements.btnExportPDF.addEventListener('click', exportPDF);
     elements.btnReset.addEventListener('click', resetSchedule);
 
@@ -2130,6 +2192,7 @@ function setupEventListeners() {
         elements.listModal.classList.add('active');
     });
     elements.btnCopyTableM.addEventListener('click', copyToClipboard);
+    elements.btnShareLinkM.addEventListener('click', shareSchedule);
     elements.btnExportPDFM.addEventListener('click', exportPDF);
     elements.btnResetM.addEventListener('click', resetSchedule);
     elements.btnCustomDataM.addEventListener('click', () => {
@@ -2361,7 +2424,9 @@ async function init() {
     elements.freshnessModal.classList.add('active');
 
     // Restore + validate selections against the active dataset
-    loadFromStorage();
+    if (!restoreFromHash()) {
+        loadFromStorage(); // no share link → load saved selections
+    }
 
     updateSummary();
     updateCustomDataStatus();
