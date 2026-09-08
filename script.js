@@ -1446,6 +1446,11 @@ function formatMoney(amount) {
     return toPersianNumber(amount.toLocaleString('en-US'));
 }
 
+/** Portal prices are Rial — display as Toman (÷ ۱۰) */
+function formatToman(amountRial) {
+    return formatMoney(Math.round(amountRial / 10)) + ' تومان';
+}
+
 function updateSummary() {
     const totalCourses = state.selectedCourses.length;
     const totalUnits = getTotalUnits();
@@ -1462,10 +1467,10 @@ function updateSummary() {
         `جمع واحدها (${formatUnits(totalUnits)}) از ${toPersianNumber(CONFIG.MAX_UNITS)} واحد مجاز بیشتر شده است!`;
     elements.scheduleContainer.classList.toggle('over-limit', overLimit);
 
-    // Cost (هزینه) — unit price × units per selected course
+    // Cost (هزینه) — unit price × units per selected course, shown in Toman
     if (elements.totalCost) {
         const totalCost = getTotalCost();
-        elements.totalCost.textContent = totalCost ? formatMoney(totalCost) : '—';
+        elements.totalCost.textContent = totalCost ? formatToman(totalCost) : '—';
     }
 }
 
@@ -1939,12 +1944,13 @@ function renderCostModal() {
                 <td class="cost-cell-name">${escapeHtml(course.name)}</td>
                 <td>${toPersianNumber(course.code)}</td>
                 <td>${formatUnits(course.units)}</td>
-                <td>${unitPrice ? formatMoney(unitPrice) : 'نامشخص'}</td>
-                <td class="cost-cell-total">${unitPrice ? formatMoney(total) : '—'}</td>
+                <td>${unitPrice ? formatToman(unitPrice) : 'نامشخص'}</td>
+                <td class="cost-cell-total">${unitPrice ? formatToman(total) : '—'}</td>
             </tr>`;
     }).join('');
 
     const total = getTotalCost();
+    const unknownLabel = unknown ? `(${toPersianNumber(unknown)} درس قیمت ندارد)` : '';
     elements.costModalBody.innerHTML = `
         <table class="cost-table">
             <thead>
@@ -1953,8 +1959,8 @@ function renderCostModal() {
             <tbody>${rows}</tbody>
             <tfoot>
                 <tr>
-                    <td colspan="5">جمع کل ${unknown ? `(۱ درس قیمت ندارد)` : ''}</td>
-                    <td class="cost-cell-total">${formatMoney(total)}</td>
+                    <td colspan="5">جمع کل ${unknownLabel}</td>
+                    <td class="cost-cell-total">${formatToman(total)}</td>
                 </tr>
             </tfoot>
         </table>
@@ -1965,8 +1971,10 @@ function renderCostModal() {
 
 /**
  * Self-contained script the user pastes into the browser console on the
- * university portal's pre-registration page: it walks the price table there
- * and ticks every course in the current selection.
+ * university portal's pre-registration page: it finds each selected course's
+ * row (code from the LesCode link, hidden LsnNo input, or bare text) and
+ * ticks it. Tolerates tables WITHOUT checkboxes by clicking the row's
+ * button-like element instead.
  */
 function buildPortalTickScript(courses) {
     const payload = JSON.stringify({
@@ -1974,37 +1982,72 @@ function buildPortalTickScript(courses) {
     });
     return `(function () {
   var data = ${payload};
-  var ticks = [];
-  var rows = document.querySelectorAll('tr');
-  rows.forEach(function (row) {
-    var box = row.querySelector('input[type=checkbox]');
+  var ticks = [], skipped = [];
+  var seen = {};
+  document.querySelectorAll('tr').forEach(function (row) {
     var cells = row.querySelectorAll('td');
-    if (!box || cells.length < 2) return;
+    if (cells.length < 2) return;
+    // course code: LesCode link > hidden LsnNo input > bare 5-7 digit cell
+    var link = row.querySelector('a[href*="LesCode="]');
     var code = '';
-    cells.forEach(function (cell) {
-      var t = cell.textContent.trim();
-      if (/^\\d{5,7}$/.test(t) && !code) code = t;
-      var hidden = cell.querySelector('input[type=hidden][name*="LsnNo"]');
-      if (hidden && !code) code = hidden.value.trim();
-    });
+    if (link) {
+      var m = link.href.match(/LesCode=(\\d+)/);
+      if (m) code = m[1];
+    }
+    if (!code) {
+      for (var i = 0; i < cells.length && !code; i++) {
+        var hidden = cells[i].querySelector('input[type=hidden][name*="LsnNo"]');
+        if (hidden) code = hidden.value.trim();
+      }
+    }
+    for (var j = 0; j < cells.length && !code; j++) {
+      var t = cells[j].textContent.trim();
+      if (/^\\d{5,7}$/.test(t)) { code = t; break; }
+    }
     if (!code) return;
-    var hit = data.courses.filter(function (c) { return c.code === code; });
-    if (!hit.length) return;
-    box.checked = true;
-    box.dispatchEvent(new Event('change', { bubbles: true }));
-    box.dispatchEvent(new Event('click', { bubbles: true }));
-    ticks.push(code + (box.disabled ? ' (غیرفعال)' : ''));
+    // group: first small-number cell AFTER the code cell (ردیف sits before it)
+    var codeIdx = -1;
+    for (var k = 0; k < cells.length && codeIdx < 0; k++) {
+      if (cells[k].querySelector('a[href*="LesCode="]') || /^\\d{5,7}$/.test(cells[k].textContent.trim()) ||
+          cells[k].querySelector('input[type=hidden][name*="LsnNo"]')) codeIdx = k;
+    }
+    var group = '';
+    for (var g = codeIdx + 1; g < cells.length && !group; g++) {
+      var gt = cells[g].textContent.trim();
+      if (/^\\d{1,2}$/.test(gt)) group = gt.replace(/^0+/, '');
+    }
+    var want = data.courses.filter(function (c) { return c.code === code; });
+    if (!want.length) return;
+    if (seen[code]) return; // keep the row matching the requested group
+    // group detected → row must be the requested variant; no group → first row wins
+    var rowMatches = want.some(function (c) { return String(c.group) === group; });
+    if (group && !rowMatches) return;
+    seen[code] = true;
+    // tick target: checkbox > radio > button-like input
+    var box = row.querySelector('input[type=checkbox]') || row.querySelector('input[type=radio]');
+    var btn = row.querySelector('input[type=button], input[type=submit], button, [onclick]');
+    if (box && !box.disabled) {
+      box.checked = true;
+      box.dispatchEvent(new Event('change', { bubbles: true }));
+      box.dispatchEvent(new Event('click', { bubbles: true }));
+      box.dispatchEvent(new Event('input', { bubbles: true }));
+      ticks.push(code + ' گروه ' + group);
+    } else if (btn) {
+      btn.click();
+      ticks.push(code + ' گروه ' + group);
+    } else {
+      skipped.push(code);
+    }
   });
-  var missing = data.courses.filter(function (c) {
-    return ticks.every(function (t) { return t.indexOf(c.code) !== 0; });
-  });
-  console.log('%c✅ ' + ticks.length + ' درس تیک خورد', 'color:#22c55e;font-weight:bold');
+  var missing = data.courses.filter(function (c) { return !seen[c.code]; });
+  console.log('%c✅ ' + ticks.length + ' درس علامت خورد', 'color:#22c55e;font-weight:bold');
   ticks.forEach(function (t) { console.log('  ✔ ' + t); });
+  if (skipped.length) console.log('%cℹ ' + skipped.length + ' ردیف بدون چک‌باکس/دکمه — دستی علامت بزنید', 'color:#3b82f6');
   if (missing.length) {
-    console.log('%c⚠ پیدا نشد: ' + missing.length + ' درس', 'color:#f59e0b;font-weight:bold');
+    console.log('%c⚠ در جدول صفحه پیدا نشد: ' + missing.length + ' درس', 'color:#f59e0b;font-weight:bold');
     missing.forEach(function (c) { console.log('  ✖ ' + c.code + ' ' + c.name); });
   }
-  console.log('این اسکریپت فقط چک‌باکس‌ها را علامت می‌زند — قبل از ثبت نهایی، صفحه را خودتان بررسی کنید.');
+  console.log('قبل از ثبت نهایی، صفحه را خودتان بررسی کنید.');
 })();`;
 }
 

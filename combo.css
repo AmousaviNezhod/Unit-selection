@@ -236,6 +236,7 @@
     min-width: 0;
     padding: var(--space-1) var(--space-3);
     white-space: nowrap;
+    font-size: var(--font-size-sm);
 }
 
 .cost-body { display: flex; flex-direction: column; gap: 18px; }
