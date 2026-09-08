@@ -1298,6 +1298,18 @@ function addCourse(courseId) {
         return;
     }
 
+    // Block time conflicts (parity-aware: زوج/فرد sessions sharing a slot don't clash)
+    for (const existingId of state.selectedCourses) {
+        const existingCourse = findCourseById(existingId);
+        if (existingCourse) {
+            const conflict = checkConflict(course, existingCourse);
+            if (conflict.hasConflict) {
+                showConflictModal(course, existingCourse, conflict);
+                return;
+            }
+        }
+    }
+
     const wasOverLimit = getTotalUnits() > CONFIG.MAX_UNITS;
 
     state.selectedCourses.push(courseId);
