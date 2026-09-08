@@ -224,3 +224,80 @@
     border-color: rgba(16, 185, 129, 0.5);
     background: rgba(16, 185, 129, 0.1);
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   COST MODAL (هزینه دروس)
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Summary bar cost item */
+.cost-summary-item .cost-value {
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.1);
+    min-width: 0;
+    padding: var(--space-1) var(--space-3);
+    white-space: nowrap;
+}
+
+.cost-body { display: flex; flex-direction: column; gap: 18px; }
+.cost-empty {
+    padding: 18px;
+    text-align: center;
+    color: var(--text-muted, #888);
+    font-size: 13px;
+}
+
+.cost-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+}
+.cost-table th,
+.cost-table td {
+    padding: 7px 10px;
+    text-align: center;
+    border-bottom: 1px solid var(--border-color, #2a2a2a);
+}
+.cost-table th {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-muted, #888);
+    background: rgba(255, 255, 255, 0.03);
+}
+.cost-table .cost-cell-name { text-align: right; font-weight: 600; }
+.cost-table .cost-cell-total { font-weight: 700; color: #10b981; }
+.cost-table tfoot td {
+    font-weight: 700;
+    border-top: 2px solid var(--border-color, #2a2a2a);
+    border-bottom: none;
+    background: rgba(255, 255, 255, 0.03);
+}
+.cost-table tfoot .cost-cell-total { font-size: 13.5px; }
+.cost-note {
+    margin-top: 10px;
+    padding: 9px 12px;
+    border-radius: 8px;
+    border: 1px dashed rgba(245, 158, 11, 0.5);
+    background: rgba(245, 158, 11, 0.07);
+    font-size: 12px;
+    color: #f59e0b;
+}
+
+.cost-script-step .combo-step-num { font-size: 12px; }
+.cost-script-box {
+    width: 100%;
+    min-height: 150px;
+    max-height: 220px;
+    resize: vertical;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color, #2a2a2a);
+    background: var(--bg-primary, #0a0a0a);
+    color: var(--text-secondary, #a0a0a0);
+    font-family: Consolas, Monaco, monospace;
+    font-size: 11.5px;
+    line-height: 1.6;
+    direction: ltr;
+    text-align: left;
+    margin-bottom: 10px;
+}
+.cost-script-box:focus { outline: none; border-color: var(--primary, #6366f1); }

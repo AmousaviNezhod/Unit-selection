@@ -109,6 +109,10 @@
                     <span class="summary-label">حد مجاز:</span>
                     <span class="summary-value" id="limitUnits">۲۰</span>
                 </div>
+                <div class="summary-item cost-summary-item" id="costSummaryItem">
+                    <span class="summary-label">هزینه:</span>
+                    <span class="summary-value cost-value" id="totalCost">—</span>
+                </div>
             </div>
 
             <div class="controls-wrapper">
@@ -158,6 +162,14 @@
                         <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
                     </svg>
                     <span>اشتراک لینک</span>
+                </button>
+
+                <button class="control-btn secondary" id="btnCost">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="1" x2="12" y2="23"></line>
+                        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                    </svg>
+                    <span>هزینه دروس</span>
                 </button>
 
                 <button class="control-btn secondary" id="btnCustomData">
@@ -335,6 +347,13 @@
                     <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
                 </svg>
                 <span>اشتراک لینک</span>
+            </button>
+            <button type="button" class="bar-btn" id="btnCostM">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="1" x2="12" y2="23"></line>
+                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                </svg>
+                <span>هزینه</span>
             </button>
             <button type="button" class="bar-btn" id="btnCustomDataM">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -670,6 +689,43 @@
 
             <div class="modal-footer">
                 <button class="btn-secondary" id="btnCloseComboFooter">بستن</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cost Modal (هزینه دروس + اسکریپت تیک خودکار) -->
+    <div class="modal-overlay" id="costModal">
+        <div class="modal-content modal-large cost-modal">
+            <div class="modal-header">
+                <h3 class="modal-title">هزینه دروس انتخاب‌شده</h3>
+                <button class="modal-close" id="closeCostModal">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="modal-body cost-body">
+                <div id="costModalBody">
+                    <!-- Cost table, filled by JS -->
+                </div>
+
+                <section class="combo-step cost-script-step">
+                    <h4 class="combo-step-title"><span class="combo-step-num">⚡</span> تیک خودکار دروس در سایت دانشگاه</h4>
+                    <p class="combo-hint">
+                        در صفحه پیش‌محاسبه سایت دانشگاه، کنسول مرورگر را باز کنید (F12 ← تب Console)،
+                        این اسکریپت را paste کرده و Enter بزنید — همه دروس انتخاب‌شده در جدول تیک می‌خورند.
+                    </p>
+                    <textarea class="cost-script-box" id="costScriptBox" readonly rows="8" spellcheck="false"></textarea>
+                    <div class="combo-gen-row">
+                        <button class="btn-primary" id="btnCopyCostScript">کپی اسکریپت</button>
+                    </div>
+                </section>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn-secondary" id="btnCloseCostModal">بستن</button>
             </div>
         </div>
     </div>

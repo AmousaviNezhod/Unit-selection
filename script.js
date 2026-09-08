@@ -26,11 +26,13 @@ const CONFIG = {
     COURSES_FILE: 'data/courses.txt',
     FALLBACK_COURSES_FILE: 'example.txt',
     LAST_UPDATE_FILE: 'data/last-update.txt',
+    PRICES_FILE: 'data/couresPrice.html',
 
     // LocalStorage keys
     STORAGE_KEY: 'university_scheduler_selected_courses',
     CUSTOM_DATA_KEY: 'university_scheduler_custom_data',
     DEGREE_KEY: 'university_scheduler_degree',
+    PRICES_KEY: 'university_scheduler_prices',
 
     // Schedule settings
     DAYS: ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه'],
@@ -63,6 +65,7 @@ const state = {
     customCourses: [],      // From user-pasted HTML table
     customActive: false,    // True when custom dataset is active
     selectedCourses: [],    // Selected course IDs (code-group)
+    prices: {},             // Course code -> unit price (from data/couresPrice.html)
     currentModalCourse: null,
     currentHours: CONFIG.HOURS, // Hours currently rendered on grid
     currentTransposed: false, // True while the fit-mode transposed grid is rendered
@@ -184,6 +187,18 @@ const elements = {
     // Units warning flag
     unitsFlag: document.getElementById('unitsFlag'),
     unitsFlagText: document.getElementById('unitsFlagText'),
+
+    // Cost (هزینه) summary + modal
+    costSummaryItem: document.getElementById('costSummaryItem'),
+    totalCost: document.getElementById('totalCost'),
+    btnCost: document.getElementById('btnCost'),
+    btnCostM: document.getElementById('btnCostM'),
+    costModal: document.getElementById('costModal'),
+    costModalBody: document.getElementById('costModalBody'),
+    costScriptBox: document.getElementById('costScriptBox'),
+    btnCopyCostScript: document.getElementById('btnCopyCostScript'),
+    closeCostModal: document.getElementById('closeCostModal'),
+    btnCloseCostModal: document.getElementById('btnCloseCostModal'),
 
     // Controls
     btnViewList: document.getElementById('btnViewList'),
@@ -1370,6 +1385,67 @@ function resetSchedule() {
     }
 }
 
+// ═══════════════════════════════════════════════════════════════
+// COURSE PRICES (data/couresPrice.html — code -> unit price)
+// ═══════════════════════════════════════════════════════════════
+
+/** Parse the portal price table: per row, course code + مبلغ واحد (unit price).
+ *  Row layout: [checkbox][code][name][مبلغ واحد][واحد][مبلغ كل] */
+function parsePriceTable(html) {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const prices = {};
+    doc.querySelectorAll('tr').forEach(row => {
+        const cells = row.querySelectorAll('td');
+        if (cells.length < 4) return;
+        const code = cells[1].textContent.trim();
+        const unitPrice = parseInt(cells[3].textContent.replace(/[^\d]/g, ''), 10);
+        if (!/^\d+$/.test(code) || !unitPrice) return;
+        prices[code] = unitPrice;
+    });
+    return prices;
+}
+
+/** Load prices fresh on every page load; cached copy as fallback */
+async function loadPrices() {
+    try {
+        const response = await fetch(CONFIG.PRICES_FILE, { cache: 'no-store' });
+        if (response.ok) {
+            const prices = parsePriceTable(await response.text());
+            if (Object.keys(prices).length) {
+                state.prices = prices;
+                try { localStorage.setItem(CONFIG.PRICES_KEY, JSON.stringify(prices)); } catch (e) { /* noop */ }
+                return;
+            }
+        }
+    } catch (error) {
+        console.warn('Could not load price file:', error);
+    }
+    // Fallback: last successfully saved prices
+    try {
+        const saved = JSON.parse(localStorage.getItem(CONFIG.PRICES_KEY) || '{}');
+        if (Object.keys(saved).length) state.prices = saved;
+    } catch (e) { /* noop */ }
+}
+
+/** Unit price of a course (0 = unknown) */
+function getCoursePrice(course) {
+    return state.prices[course.code] || 0;
+}
+
+/** Total cost of the current selection (unit price × units per course) */
+function getTotalCost() {
+    return state.selectedCourses.reduce((sum, id) => {
+        const course = findCourseById(id);
+        if (!course) return sum;
+        return sum + getCoursePrice(course) * course.units;
+    }, 0);
+}
+
+/** 13500000 -> "۱۳,۵۰۰,۰۰۰" (Persian digits, thousands separators) */
+function formatMoney(amount) {
+    return toPersianNumber(amount.toLocaleString('en-US'));
+}
+
 function updateSummary() {
     const totalCourses = state.selectedCourses.length;
     const totalUnits = getTotalUnits();
@@ -1385,6 +1461,12 @@ function updateSummary() {
     elements.unitsFlagText.textContent =
         `جمع واحدها (${formatUnits(totalUnits)}) از ${toPersianNumber(CONFIG.MAX_UNITS)} واحد مجاز بیشتر شده است!`;
     elements.scheduleContainer.classList.toggle('over-limit', overLimit);
+
+    // Cost (هزینه) — unit price × units per selected course
+    if (elements.totalCost) {
+        const totalCost = getTotalCost();
+        elements.totalCost.textContent = totalCost ? formatMoney(totalCost) : '—';
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1831,6 +1913,121 @@ function renderSelectedList() {
     });
 }
 
+// ═══════════════════════════════════════════════════════════════
+// COST MODAL (breakdown + copyable portal script)
+// ═══════════════════════════════════════════════════════════════
+
+function renderCostModal() {
+    const courses = state.selectedCourses
+        .map(findCourseById)
+        .filter(Boolean);
+
+    if (!courses.length) {
+        elements.costModalBody.innerHTML = '<div class="cost-empty">هنوز درسی انتخاب نشده است</div>';
+        elements.costScriptBox.value = '';
+        return;
+    }
+
+    let unknown = 0;
+    const rows = courses.map((course, index) => {
+        const unitPrice = getCoursePrice(course);
+        const total = unitPrice * course.units;
+        if (!unitPrice) unknown++;
+        return `
+            <tr>
+                <td>${toPersianNumber(index + 1)}</td>
+                <td class="cost-cell-name">${escapeHtml(course.name)}</td>
+                <td>${toPersianNumber(course.code)}</td>
+                <td>${formatUnits(course.units)}</td>
+                <td>${unitPrice ? formatMoney(unitPrice) : 'نامشخص'}</td>
+                <td class="cost-cell-total">${unitPrice ? formatMoney(total) : '—'}</td>
+            </tr>`;
+    }).join('');
+
+    const total = getTotalCost();
+    elements.costModalBody.innerHTML = `
+        <table class="cost-table">
+            <thead>
+                <tr><th>#</th><th>نام درس</th><th>کد</th><th>واحد</th><th>مبلغ واحد</th><th>مبلغ کل</th></tr>
+            </thead>
+            <tbody>${rows}</tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="5">جمع کل ${unknown ? `(۱ درس قیمت ندارد)` : ''}</td>
+                    <td class="cost-cell-total">${formatMoney(total)}</td>
+                </tr>
+            </tfoot>
+        </table>
+        ${unknown ? '<div class="cost-note">قیمت بعضی دروس در جدول قیمت پیدا نشد — جمع کل ممکن است ناقص باشد.</div>' : ''}`;
+
+    elements.costScriptBox.value = buildPortalTickScript(courses);
+}
+
+/**
+ * Self-contained script the user pastes into the browser console on the
+ * university portal's pre-registration page: it walks the price table there
+ * and ticks every course in the current selection.
+ */
+function buildPortalTickScript(courses) {
+    const payload = JSON.stringify({
+        courses: courses.map(c => ({ code: String(c.code), group: String(c.group), name: c.name }))
+    });
+    return `(function () {
+  var data = ${payload};
+  var ticks = [];
+  var rows = document.querySelectorAll('tr');
+  rows.forEach(function (row) {
+    var box = row.querySelector('input[type=checkbox]');
+    var cells = row.querySelectorAll('td');
+    if (!box || cells.length < 2) return;
+    var code = '';
+    cells.forEach(function (cell) {
+      var t = cell.textContent.trim();
+      if (/^\\d{5,7}$/.test(t) && !code) code = t;
+      var hidden = cell.querySelector('input[type=hidden][name*="LsnNo"]');
+      if (hidden && !code) code = hidden.value.trim();
+    });
+    if (!code) return;
+    var hit = data.courses.filter(function (c) { return c.code === code; });
+    if (!hit.length) return;
+    box.checked = true;
+    box.dispatchEvent(new Event('change', { bubbles: true }));
+    box.dispatchEvent(new Event('click', { bubbles: true }));
+    ticks.push(code + (box.disabled ? ' (غیرفعال)' : ''));
+  });
+  var missing = data.courses.filter(function (c) {
+    return ticks.every(function (t) { return t.indexOf(c.code) !== 0; });
+  });
+  console.log('%c✅ ' + ticks.length + ' درس تیک خورد', 'color:#22c55e;font-weight:bold');
+  ticks.forEach(function (t) { console.log('  ✔ ' + t); });
+  if (missing.length) {
+    console.log('%c⚠ پیدا نشد: ' + missing.length + ' درس', 'color:#f59e0b;font-weight:bold');
+    missing.forEach(function (c) { console.log('  ✖ ' + c.code + ' ' + c.name); });
+  }
+  console.log('این اسکریپت فقط چک‌باکس‌ها را علامت می‌زند — قبل از ثبت نهایی، صفحه را خودتان بررسی کنید.');
+})();`;
+}
+
+function openCostModal() {
+    renderCostModal();
+    elements.costModal.classList.add('active');
+}
+
+async function copyCostScript() {
+    const text = elements.costScriptBox.value;
+    if (!text) {
+        showToast('اسکریپتی برای کپی نیست — اول درس انتخاب کنید', 'warning');
+        return;
+    }
+    try {
+        await navigator.clipboard.writeText(text);
+        showToast('اسکریپت کپی شد — در کنسول صفحه پیش‌محاسبه paste کنید', 'success');
+    } catch (error) {
+        console.error('Error copying script:', error);
+        showToast('خطا در کپی کردن', 'error');
+    }
+}
+
 function closeAllModals() {
     document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('active'));
     state.currentModalCourse = null;
@@ -2183,6 +2380,7 @@ function setupEventListeners() {
     });
     elements.btnCopyTable.addEventListener('click', copyToClipboard);
     elements.btnShareLink.addEventListener('click', shareSchedule);
+    elements.btnCost.addEventListener('click', openCostModal);
     elements.btnExportPDF.addEventListener('click', exportPDF);
     elements.btnReset.addEventListener('click', resetSchedule);
 
@@ -2193,6 +2391,7 @@ function setupEventListeners() {
     });
     elements.btnCopyTableM.addEventListener('click', copyToClipboard);
     elements.btnShareLinkM.addEventListener('click', shareSchedule);
+    elements.btnCostM.addEventListener('click', openCostModal);
     elements.btnExportPDFM.addEventListener('click', exportPDF);
     elements.btnResetM.addEventListener('click', resetSchedule);
     elements.btnCustomDataM.addEventListener('click', () => {
@@ -2324,6 +2523,11 @@ function setupEventListeners() {
     elements.btnCloseConflictModal.addEventListener('click', closeAllModals);
     elements.closeCustomDataModal.addEventListener('click', closeAllModals);
 
+    // Cost modal
+    elements.closeCostModal.addEventListener('click', closeAllModals);
+    elements.btnCloseCostModal.addEventListener('click', closeAllModals);
+    elements.btnCopyCostScript.addEventListener('click', copyCostScript);
+
     // Data-freshness notice: close via X or footer button
     elements.closeFreshnessModal.addEventListener('click', closeAllModals);
     elements.btnCloseFreshness.addEventListener('click', closeAllModals);
@@ -2412,7 +2616,7 @@ async function init() {
     }
 
     // Load fresh data from files (every page request)
-    await Promise.all([loadCourses(), loadLastUpdate()]);
+    await Promise.all([loadCourses(), loadLastUpdate(), loadPrices()]);
 
     // Degree (مقطع) choice: restore the saved selection before lists render,
     // then fill the modal select from the degrees present in the data
