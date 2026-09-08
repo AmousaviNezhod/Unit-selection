@@ -1971,10 +1971,11 @@ function renderCostModal() {
 
 /**
  * Self-contained script the user pastes into the browser console on the
- * university portal's pre-registration page: it finds each selected course's
- * row (code from the LesCode link, hidden LsnNo input, or bare text) and
- * ticks it. Tolerates tables WITHOUT checkboxes by clicking the row's
- * button-like element instead.
+ * university portal page: it scans the document AND same-origin iframes
+ * (portal tables often live inside a frame) for each selected course's row —
+ * code from the LesCode link, the row-level hidden LsnNo input, or bare
+ * digits — then ticks it. Falls back to clicking a button-like element when
+ * the row has no checkbox.
  */
 function buildPortalTickScript(courses) {
     const payload = JSON.stringify({
@@ -1984,61 +1985,82 @@ function buildPortalTickScript(courses) {
   var data = ${payload};
   var ticks = [], skipped = [];
   var seen = {};
-  document.querySelectorAll('tr').forEach(function (row) {
-    var cells = row.querySelectorAll('td');
-    if (cells.length < 2) return;
-    // course code: LesCode link > hidden LsnNo input > bare 5-7 digit cell
-    var link = row.querySelector('a[href*="LesCode="]');
-    var code = '';
-    if (link) {
-      var m = link.href.match(/LesCode=(\\d+)/);
-      if (m) code = m[1];
-    }
-    if (!code) {
-      for (var i = 0; i < cells.length && !code; i++) {
-        var hidden = cells[i].querySelector('input[type=hidden][name*="LsnNo"]');
-        if (hidden) code = hidden.value.trim();
+
+  // collect the top document + every reachable same-origin frame document
+  var docs = [];
+  function collectDocs(win, depth) {
+    if (!win || depth > 5) return;
+    try {
+      docs.push({ doc: win.document, label: docs.length ? 'فریم ' + docs.length : 'صفحه اصلی' });
+    } catch (e) { return; }
+    for (var i = 0; i < win.frames.length; i++) collectDocs(win.frames[i], depth + 1);
+  }
+  try { collectDocs(window, 0); } catch (e) {}
+  if (!docs.length) docs.push({ doc: document, label: 'صفحه اصلی' });
+
+  function runDoc(doc, label) {
+    var scanned = 0;
+    doc.querySelectorAll('tr').forEach(function (row) {
+      var box0 = row.querySelector('input[type=checkbox]');
+      var cells = row.querySelectorAll('td');
+      if (!box0 && cells.length < 2) return;
+      scanned++;
+      // course code: LesCode link > row-level hidden LsnNo input > bare 5-7 digit cell
+      var link = row.querySelector('a[href*="LesCode="]');
+      var code = '';
+      if (link) {
+        var m = link.href.match(/LesCode=(\\d+)/);
+        if (m) code = m[1];
       }
-    }
-    for (var j = 0; j < cells.length && !code; j++) {
-      var t = cells[j].textContent.trim();
-      if (/^\\d{5,7}$/.test(t)) { code = t; break; }
-    }
-    if (!code) return;
-    // group: first small-number cell AFTER the code cell (ردیف sits before it)
-    var codeIdx = -1;
-    for (var k = 0; k < cells.length && codeIdx < 0; k++) {
-      if (cells[k].querySelector('a[href*="LesCode="]') || /^\\d{5,7}$/.test(cells[k].textContent.trim()) ||
-          cells[k].querySelector('input[type=hidden][name*="LsnNo"]')) codeIdx = k;
-    }
-    var group = '';
-    for (var g = codeIdx + 1; g < cells.length && !group; g++) {
-      var gt = cells[g].textContent.trim();
-      if (/^\\d{1,2}$/.test(gt)) group = gt.replace(/^0+/, '');
-    }
-    var want = data.courses.filter(function (c) { return c.code === code; });
-    if (!want.length) return;
-    if (seen[code]) return; // keep the row matching the requested group
-    // group detected → row must be the requested variant; no group → first row wins
-    var rowMatches = want.some(function (c) { return String(c.group) === group; });
-    if (group && !rowMatches) return;
-    seen[code] = true;
-    // tick target: checkbox > radio > button-like input
-    var box = row.querySelector('input[type=checkbox]') || row.querySelector('input[type=radio]');
-    var btn = row.querySelector('input[type=button], input[type=submit], button, [onclick]');
-    if (box && !box.disabled) {
-      box.checked = true;
-      box.dispatchEvent(new Event('change', { bubbles: true }));
-      box.dispatchEvent(new Event('click', { bubbles: true }));
-      box.dispatchEvent(new Event('input', { bubbles: true }));
-      ticks.push(code + ' گروه ' + group);
-    } else if (btn) {
-      btn.click();
-      ticks.push(code + ' گروه ' + group);
-    } else {
-      skipped.push(code);
-    }
-  });
+      if (!code) {
+        var hidden = row.querySelector('input[type=hidden][name*="LsnNo"]');
+        if (hidden) code = (hidden.value || '').trim();
+      }
+      for (var j = 0; j < cells.length && !code; j++) {
+        var t = cells[j].textContent.trim();
+        if (/^\\d{5,7}$/.test(t)) { code = t; break; }
+      }
+      if (!code) return;
+      // group: first small-number cell AFTER the code cell (ردیف sits before it)
+      var codeIdx = -1;
+      for (var k = 0; k < cells.length && codeIdx < 0; k++) {
+        if (cells[k].querySelector('a[href*="LesCode="]') || /^\\d{5,7}$/.test(cells[k].textContent.trim())) codeIdx = k;
+      }
+      var group = '';
+      for (var g = codeIdx + 1; g < cells.length && !group; g++) {
+        var gt = cells[g].textContent.trim();
+        if (/^\\d{1,2}$/.test(gt)) group = gt.replace(/^0+/, '');
+      }
+      var want = data.courses.filter(function (c) { return c.code === code; });
+      if (!want.length) return;
+      if (seen[code]) return; // keep the row matching the requested group
+      // group detected → row must be the requested variant; no group → first row wins
+      var rowMatches = want.some(function (c) { return String(c.group) === group; });
+      if (group && !rowMatches) return;
+      seen[code] = true;
+      // tick target: checkbox > radio > button-like element
+      var box = box0 || row.querySelector('input[type=radio]');
+      var btn = row.querySelector('input[type=button], input[type=submit], button, [onclick]');
+      if (box && !box.disabled) {
+        box.checked = true;
+        box.dispatchEvent(new Event('change', { bubbles: true }));
+        box.dispatchEvent(new Event('click', { bubbles: true }));
+        box.dispatchEvent(new Event('input', { bubbles: true }));
+        ticks.push(code + (group ? ' گروه ' + group : ''));
+      } else if (btn) {
+        btn.click();
+        ticks.push(code + (group ? ' گروه ' + group : ''));
+      } else {
+        skipped.push(code);
+      }
+    });
+    console.log('%c[' + label + '] ' + scanned + ' ردیف بررسی شد', 'color:#6b7280');
+    return scanned;
+  }
+
+  var total = 0;
+  docs.forEach(function (d) { total += runDoc(d.doc, d.label); });
+
   var missing = data.courses.filter(function (c) { return !seen[c.code]; });
   console.log('%c✅ ' + ticks.length + ' درس علامت خورد', 'color:#22c55e;font-weight:bold');
   ticks.forEach(function (t) { console.log('  ✔ ' + t); });
@@ -2047,6 +2069,7 @@ function buildPortalTickScript(courses) {
     console.log('%c⚠ در جدول صفحه پیدا نشد: ' + missing.length + ' درس', 'color:#f59e0b;font-weight:bold');
     missing.forEach(function (c) { console.log('  ✖ ' + c.code + ' ' + c.name); });
   }
+  if (!total) console.log('%cهیچ جدولی پیدا نشد — مطمئن شو جدول دروس کامل لود شده و صفحه انتخاب واحد باز است', 'color:#ef4444;font-weight:bold');
   console.log('قبل از ثبت نهایی، صفحه را خودتان بررسی کنید.');
 })();`;
 }
