@@ -2375,6 +2375,11 @@ function setupEventListeners() {
             showSearchResults(true);
         }
     });
+
+    // Combo generator
+    if (typeof setupComboGenerator === 'function') {
+        setupComboGenerator();
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════

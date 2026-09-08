@@ -16,6 +16,7 @@
 
     <!-- Styles -->
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="combo.css">
 </head>
 <body class="dark-mode">
 
@@ -111,6 +112,13 @@
             </div>
 
             <div class="controls-wrapper">
+                <button class="control-btn primary" id="btnComboGen">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 3v3m0 12v3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1M3 12h3m12 0h3M5.6 18.4l2.1-2.1m8.6-8.6 2.1-2.1"></path>
+                        <circle cx="12" cy="12" r="4"></circle>
+                    </svg>
+                    <span>تولیدکننده ترکیب</span>
+                </button>
                 <button class="control-btn primary" id="btnViewList">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="8" y1="6" x2="21" y2="6"></line>
@@ -284,6 +292,13 @@
 
         <!-- ===== MOBILE FLOATING ACTION DOCK (fixed, detached from bottom, phones only) ===== -->
         <nav class="mobile-action-bar" id="mobileActionBar" aria-label="عملیات جدول">
+            <button type="button" class="bar-btn primary" id="btnComboGenM">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 3v3m0 12v3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1M3 12h3m12 0h3M5.6 18.4l2.1-2.1m8.6-8.6 2.1-2.1"></path>
+                    <circle cx="12" cy="12" r="4"></circle>
+                </svg>
+                <span>ترکیب‌ساز</span>
+            </button>
             <button type="button" class="bar-btn" id="btnViewListM">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <line x1="8" y1="6" x2="21" y2="6"></line>
@@ -602,10 +617,68 @@
         </div>
     </div>
 
+    <!-- Combo Generator Modal -->
+    <div class="modal-overlay" id="comboModal">
+        <div class="modal-content modal-large combo-modal">
+            <div class="modal-header">
+                <h3 class="modal-title">تولیدکننده ترکیب برنامه</h3>
+                <button class="modal-close" id="closeComboModal">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="modal-body combo-body">
+                <!-- Step 1: pick desired courses -->
+                <section class="combo-step">
+                    <h4 class="combo-step-title"><span class="combo-step-num">۱</span> دروس مطلوب ترم را علامت بزنید</h4>
+                    <p class="combo-hint">از هر درس، همه گروه‌های موجود به‌عنوان جایگزین در نظر گرفته می‌شوند.</p>
+                    <div class="combo-picker">
+                        <input type="text" id="comboSearch" class="combo-search" placeholder="جستجوی درس برای افزودن..." autocomplete="off">
+                        <div class="combo-search-results" id="comboSearchResults" hidden></div>
+                    </div>
+                    <div class="combo-wanted" id="comboWanted">
+                        <!-- Chips of desired courses, filled by JS -->
+                    </div>
+                </section>
+
+                <!-- Step 2: passed courses -->
+                <section class="combo-step">
+                    <h4 class="combo-step-title"><span class="combo-step-num">۲</span> دروس پاس‌شده (اختیاری)</h4>
+                    <p class="combo-hint">دروسی که قبلاً پاس کرده‌اید علامت بزنید — در پیشنهادها و ترکیب‌ها حساب نمی‌شوند و از لیست جستجو هم حذف می‌شوند.</p>
+                    <div class="combo-passed-tools">
+                        <input type="text" id="comboPassedSearch" class="combo-search" placeholder="جستجوی درس برای علامت زدن پاس‌شده..." autocomplete="off">
+                        <div class="combo-search-results" id="comboPassedResults" hidden></div>
+                    </div>
+                    <div class="combo-passed-count" id="comboPassedCount">هیچ درسی علامت نخورده</div>
+                </section>
+
+                <!-- Step 3: generate -->
+                <section class="combo-step">
+                    <h4 class="combo-step-title"><span class="combo-step-num">۳</span> تولید ترکیب‌ها</h4>
+                    <div class="combo-gen-row">
+                        <button class="btn-primary" id="btnGenerateCombos">تولید ترکیب‌های بدون تداخل</button>
+                        <button class="btn-secondary" id="btnClearCombo">پاک کردن همه</button>
+                    </div>
+                    <div class="combo-results" id="comboResults">
+                        <!-- Results filled by JS -->
+                    </div>
+                </section>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn-secondary" id="btnCloseComboFooter">بستن</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Notification -->
     <div class="toast-container" id="toastContainer"></div>
 
     <!-- ==================== SCRIPTS ==================== -->
+    <script src="combo.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
