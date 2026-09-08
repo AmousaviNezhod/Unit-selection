@@ -33,6 +33,7 @@ const CONFIG = {
     CUSTOM_DATA_KEY: 'university_scheduler_custom_data',
     DEGREE_KEY: 'university_scheduler_degree',
     PRICES_KEY: 'university_scheduler_prices',
+    SCHEDULES_KEY: 'university_scheduler_schedules',
 
     // Schedule settings
     DAYS: ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه'],
@@ -40,6 +41,9 @@ const CONFIG = {
 
     // Units
     MAX_UNITS: 20,
+
+    // Multi-schedule tabs
+    MAX_SCHEDULES: 5,
 
     // Search settings
     INITIAL_COURSE_COUNT: 10,
@@ -64,7 +68,9 @@ const state = {
     defaultCourses: [],     // From data/courses.txt
     customCourses: [],      // From user-pasted HTML table
     customActive: false,    // True when custom dataset is active
-    selectedCourses: [],    // Selected course IDs (code-group)
+    selectedCourses: [],    // Selected course IDs (code-group) of the ACTIVE schedule
+    schedules: [],          // [{ id, name, courses: [] }] — one entry per tab
+    activeScheduleId: '',   // Currently shown schedule tab
     prices: {},             // Course code -> unit price (from data/couresPrice.html)
     currentModalCourse: null,
     currentHours: CONFIG.HOURS, // Hours currently rendered on grid
@@ -222,6 +228,7 @@ const elements = {
     scheduleBody: document.getElementById('scheduleBody'),
     scheduleTable: document.getElementById('scheduleTable'),
     scheduleContainer: document.getElementById('scheduleContainer'),
+    scheduleTabs: document.getElementById('scheduleTabs'),
 
     // Theme
     themeToggle: document.getElementById('themeToggle'),
@@ -996,7 +1003,196 @@ function clearCustomData() {
 function pruneSelections(courses) {
     const valid = new Set(courses.map(getCourseId));
     state.selectedCourses = state.selectedCourses.filter(id => valid.has(id));
-    saveToStorage();
+    saveSchedules();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MULTI-SCHEDULE TABS (حالت برنامه چندتایی)
+// state.selectedCourses always mirrors the ACTIVE tab; the full tab
+// list lives in state.schedules and persists to SCHEDULES_KEY.
+// The active tab is also mirrored to STORAGE_KEY so old features
+// (share links, combo.js) keep working unchanged.
+// ═══════════════════════════════════════════════════════════════
+
+/** Load schedule tabs; first run seeds one tab from the old single-selection key */
+function loadSchedules() {
+    try {
+        const saved = localStorage.getItem(CONFIG.SCHEDULES_KEY);
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed.tabs) && parsed.tabs.length) {
+                state.schedules = parsed.tabs.filter(t => t && typeof t.id === 'string');
+                state.activeScheduleId = state.schedules.some(t => t.id === parsed.activeId)
+                    ? parsed.activeId
+                    : state.schedules[0].id;
+                state.selectedCourses = [...(getActiveSchedule()?.courses || [])];
+                return;
+            }
+        }
+    } catch (error) {
+        console.error('Error loading schedules:', error);
+    }
+    // First run (or corrupt data): migrate the legacy selection into tab 1
+    let legacy = [];
+    try {
+        legacy = JSON.parse(localStorage.getItem(CONFIG.STORAGE_KEY) || '[]');
+        if (!Array.isArray(legacy)) legacy = [];
+    } catch (e) { legacy = []; }
+    state.schedules = [{ id: 'tab1', name: 'برنامه ۱', courses: legacy }];
+    state.activeScheduleId = 'tab1';
+    state.selectedCourses = [...legacy];
+}
+
+/** Persist the tab list; the active tab's courses are also mirrored to
+ *  STORAGE_KEY (share-link restore + combo.js write there) */
+function saveSchedules() {
+    const tab = getActiveSchedule();
+    if (tab) tab.courses = [...state.selectedCourses];
+    try {
+        localStorage.setItem(CONFIG.SCHEDULES_KEY, JSON.stringify({
+            tabs: state.schedules,
+            activeId: state.activeScheduleId
+        }));
+        localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(state.selectedCourses));
+    } catch (error) {
+        console.error('Error saving schedules:', error);
+    }
+}
+
+function getActiveSchedule() {
+    return state.schedules.find(t => t.id === state.activeScheduleId) || null;
+}
+
+/** Sync every tab's courses from its stored copy EXCEPT the active one */
+function syncSchedulesFromState() {
+    const tab = getActiveSchedule();
+    if (tab) tab.courses = [...state.selectedCourses];
+}
+
+/** Create a new empty schedule tab (up to CONFIG.MAX_SCHEDULES) */
+function createSchedule() {
+    if (state.schedules.length >= CONFIG.MAX_SCHEDULES) {
+        showToast(`حداکثر ${toPersianNumber(CONFIG.MAX_SCHEDULES)} برنامه می‌توان داشته باشید`, 'warning');
+        return;
+    }
+    // unique id
+    let id = 'tab' + Date.now();
+    while (state.schedules.some(t => t.id === id)) id = 'tab' + Date.now() + Math.floor(Math.random() * 100);
+    const name = `برنامه ${toPersianNumber(state.schedules.length + 1)}`;
+    state.schedules.push({ id, name, courses: [] });
+    switchSchedule(id);
+    showToast(`"${name}" ساخته شد`, 'success');
+}
+
+/** Switch the active tab: stash current selection, load the target's */
+function switchSchedule(id) {
+    if (id === state.activeScheduleId) return;
+    const target = state.schedules.find(t => t.id === id);
+    if (!target) return;
+
+    // stash the outgoing selection, then swap
+    syncSchedulesFromState();
+    state.activeScheduleId = id;
+    state.selectedCourses = [...target.courses];
+    state.unitsWarned = false;
+    saveSchedules();
+
+    // same cascade as add/remove course
+    updateSummary();
+    refreshLists();
+    renderSchedule();
+    renderScheduleTabs();
+}
+
+/** Delete a tab; never the last one; switch to the first remaining when needed */
+function deleteSchedule(id) {
+    if (state.schedules.length <= 1) {
+        showToast('حداقل یک برنامه باید باقی بماند', 'warning');
+        return;
+    }
+    const tab = state.schedules.find(t => t.id === id);
+    if (!tab) return;
+    const count = tab.courses.length;
+    if (!confirm(`برنامه "${tab.name}" با ${toPersianNumber(count)} درس حذف شود؟`)) return;
+
+    state.schedules = state.schedules.filter(t => t.id !== id);
+    if (id === state.activeScheduleId) {
+        // switch to the first remaining tab without the confirm dance
+        const next = state.schedules[0];
+        state.activeScheduleId = next.id;
+        state.selectedCourses = [...next.courses];
+        state.unitsWarned = false;
+        updateSummary();
+        refreshLists();
+        renderSchedule();
+    }
+    saveSchedules();
+    renderScheduleTabs();
+    showToast(`"${tab.name}" حذف شد`, 'info');
+}
+
+/** Rename a tab via prompt */
+function renameSchedule(id) {
+    const tab = state.schedules.find(t => t.id === id);
+    if (!tab) return;
+    const name = prompt('نام برنامه:', tab.name);
+    if (name === null) return; // cancelled
+    const trimmed = name.trim();
+    if (!trimmed || trimmed === tab.name) return;
+    tab.name = trimmed.slice(0, 40);
+    saveSchedules();
+    renderScheduleTabs();
+}
+
+/** Render the tab chips above the schedule table */
+function renderScheduleTabs() {
+    const host = elements.scheduleTabs;
+    if (!host) return;
+    host.innerHTML = '';
+
+    state.schedules.forEach(tab => {
+        const chip = document.createElement('div');
+        chip.className = 'schedule-tab' + (tab.id === state.activeScheduleId ? ' active' : '');
+        chip.title = 'دابل‌کلیک: تغییر نام';
+
+        const label = document.createElement('span');
+        label.className = 'schedule-tab-name';
+        label.textContent = tab.name;
+
+        const count = document.createElement('span');
+        count.className = 'schedule-tab-count';
+        count.textContent = toPersianNumber(tab.id === state.activeScheduleId
+            ? state.selectedCourses.length
+            : tab.courses.length);
+
+        const del = document.createElement('button');
+        del.className = 'schedule-tab-delete';
+        del.type = 'button';
+        del.innerHTML = '&times;';
+        del.setAttribute('aria-label', `حذف ${tab.name}`);
+        del.title = 'حذف برنامه';
+        del.addEventListener('click', e => {
+            e.stopPropagation();
+            deleteSchedule(tab.id);
+        });
+
+        chip.append(label, count, del);
+        chip.addEventListener('click', () => switchSchedule(tab.id));
+        chip.addEventListener('dblclick', () => renameSchedule(tab.id));
+        host.appendChild(chip);
+    });
+
+    // add-tab button (hidden at the cap)
+    if (state.schedules.length < CONFIG.MAX_SCHEDULES) {
+        const add = document.createElement('button');
+        add.className = 'schedule-tab-add';
+        add.type = 'button';
+        add.innerHTML = '+';
+        add.title = 'برنامه جدید';
+        add.setAttribute('aria-label', 'افزودن برنامه جدید');
+        add.addEventListener('click', createSchedule);
+        host.appendChild(add);
+    }
 }
 
 /** True when the viewport is phone-sized (same breakpoint as CSS media queries) */
@@ -1330,7 +1526,7 @@ function addCourse(courseId) {
     const wasOverLimit = getTotalUnits() > CONFIG.MAX_UNITS;
 
     state.selectedCourses.push(courseId);
-    saveToStorage();
+    saveSchedules();
     updateSummary();
     refreshLists();
     renderSchedule();
@@ -1355,7 +1551,7 @@ function removeCourse(courseId) {
 
     const course = findCourseById(courseId);
     state.selectedCourses.splice(index, 1);
-    saveToStorage();
+    saveSchedules();
     updateSummary();
     refreshLists();
     renderSchedule();
@@ -1374,10 +1570,10 @@ function resetSchedule() {
         return;
     }
 
-    if (confirm('آیا مطمئن هستید که می‌خواهید تمام دروس را حذف کنید؟')) {
+    if (confirm('آیا مطمئن هستید که می‌خواهید تمام دروس این برنامه را حذف کنید؟')) {
         state.selectedCourses = [];
         state.unitsWarned = false;
-        saveToStorage();
+        saveSchedules();
         updateSummary();
         refreshLists();
         renderSchedule();
@@ -2130,7 +2326,7 @@ function applyCustomData(text, { silent = false } = {}) {
 
     // Dataset replaced: wipe all previous selections so the schedule starts clean
     state.selectedCourses = [];
-    saveToStorage();
+    saveSchedules();
     state.unitsWarned = false;
 
     updateSummary();
@@ -2151,7 +2347,7 @@ function restoreDefaultData() {
     // Dataset replaced: wipe all selections so the schedule starts clean,
     // same as applyCustomData — stale default selections must not survive
     state.selectedCourses = [];
-    saveToStorage();
+    saveSchedules();
     state.unitsWarned = false;
 
     updateSummary();
@@ -2341,7 +2537,7 @@ function restoreFromHash() {
         if (!valid.length) return false;
 
         state.selectedCourses = valid;
-        saveToStorage();
+        saveSchedules();
         // Strip the hash so a refresh doesn't re-import the shared list
         history.replaceState(null, '', location.pathname + location.search);
         return true;
@@ -2698,15 +2894,19 @@ async function init() {
     }
     elements.freshnessModal.classList.add('active');
 
-    // Restore + validate selections against the active dataset
+    // Restore schedule tabs first (seeds tab 1 from the legacy key on first run),
+    // then import a share link into the active tab or load its saved selection
+    loadSchedules();
     if (!restoreFromHash()) {
         loadFromStorage(); // no share link → load saved selections
     }
+    syncSchedulesFromState();
 
     updateSummary();
     updateCustomDataStatus();
     renderPanelList();
     renderSchedule();
+    renderScheduleTabs();
 
     // Build advanced filter bars (mobile search + desktop drawer)
     rebuildFilterBars();

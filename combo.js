@@ -301,7 +301,10 @@ function renderCombos() {
 /** Replace the main selection with this combo (bypassing per-add toasts) */
 function applyCombo(ids, btn) {
     state.selectedCourses = ids.filter(id => findCourseById(id));
-    saveToStorage();
+    // saveSchedules (script.js) keeps the active tab in sync when tabs exist;
+    // falls back to the legacy key on older builds
+    if (typeof saveSchedules === 'function') saveSchedules();
+    else saveToStorage();
     state.unitsWarned = false;
     updateSummary();
     refreshLists();

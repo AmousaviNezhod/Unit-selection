@@ -1445,6 +1445,98 @@ body.modal-open {
     color: var(--text-primary);
 }
 
+/* ── Multi-schedule tabs (حالت برنامه چندتایی) ─────────────── */
+.schedule-tabs {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    width: 100%;
+    order: -1; /* tabs row above the title/actions row */
+}
+
+.schedule-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 6px var(--space-3);
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-bottom: 2px solid transparent;
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-semibold);
+    cursor: pointer;
+    user-select: none;
+    transition: color var(--transition-fast), border-color var(--transition-fast),
+        background-color var(--transition-fast);
+}
+
+.schedule-tab:hover {
+    color: var(--text-primary);
+    border-color: var(--accent, var(--text-primary));
+}
+
+.schedule-tab.active {
+    color: var(--text-primary);
+    background-color: rgba(99, 102, 241, 0.12);
+    border-color: rgba(99, 102, 241, 0.6);
+    border-bottom-color: rgba(99, 102, 241, 0.9);
+}
+
+.schedule-tab-count {
+    padding: 0 6px;
+    border-radius: 999px;
+    background-color: rgba(255, 255, 255, 0.08);
+    font-size: 11px;
+    font-weight: var(--font-bold);
+    line-height: 18px;
+}
+
+.schedule-tab-delete {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.schedule-tab-delete:hover {
+    color: var(--danger);
+    background-color: rgba(239, 68, 68, 0.15);
+}
+
+.schedule-tab-add {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 1px dashed var(--border-primary);
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.schedule-tab-add:hover {
+    color: var(--text-primary);
+    border-color: var(--accent, var(--text-primary));
+}
+
 /* 20-units warning flag */
 .units-flag {
     display: none;
