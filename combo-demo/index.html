@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>دمو: تولیدکننده ترکیب برنامه — سیستم پیش‌انتخاب واحد</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="combo.css">
+</head>
+<body class="dark-mode">
+
+    <!-- ==================== DEMO BANNER ==================== -->
+    <div class="demo-banner">
+        <strong>نسخه دمو</strong> — تولیدکننده ترکیب برنامه. از <a href="../index.html" class="demo-banner-link">نسخه اصلی</a> استفاده کنید.
+    </div>
+
+    <!-- ==================== HEADER ==================== -->
+    <header class="app-header">
+        <div class="header-content">
+            <div class="logo-section">
+                <div class="logo-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                        <line x1="16" y1="2" x2="16" y2="6"></line>
+                        <line x1="8" y1="2" x2="8" y2="6"></line>
+                        <line x1="3" y1="10" x2="21" y2="10"></line>
+                    </svg>
+                </div>
+                <h1 class="app-title">پیش‌انتخاب واحد</h1>
+            </div>
+
+            <div class="header-actions">
+                <div class="data-update" id="dataUpdate" title="آخرین به‌روزرسانی دیتای دروس">
+                    <span class="update-dot"></span>
+                    <span class="data-update-label">آخرین به‌روزرسانی دیتا:</span>
+                    <span class="data-update-value" id="lastUpdateValue">—</span>
+                </div>
+
+                <button class="theme-toggle" id="themeToggle" aria-label="تغییر تم">
+                    <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="5"></circle>
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                    </svg>
+                    <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- ==================== MAIN CONTENT ==================== -->
+    <main class="main-container">
+
+        <!-- ===== CUSTOM DATA ACTIVE BANNER ===== -->
+        <div class="custom-data-banner hidden" id="customDataBanner">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                <line x1="12" y1="9" x2="12" y2="13"></line>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+            <span>به دلیل ورود دیتا دستی، از دیتای اصلی سایت نمی‌توانید استفاده کنید</span>
+            <button class="banner-reset-btn" id="btnBannerRestoreDefault" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="1 4 1 10 7 10"></polyline>
+                    <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+                </svg>
+                بازگشت به دیتای پیش‌فرض
+            </button>
+        </div>
+
+        <!-- ===== MOBILE SEARCH TRIGGER (opens the search modal, hidden on desktop) ===== -->
+        <section class="search-section" id="searchSection">
+            <button type="button" class="search-trigger" id="searchTrigger" aria-haspopup="dialog">
+                <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                </svg>
+                <span class="search-trigger-text">جستجوی درس، استاد یا کد...</span>
+                <span class="search-trigger-hint">جستجو و فیلتر</span>
+            </button>
+        </section>
+
+        <!-- ===== SUMMARY + CONTROLS ===== -->
+        <section class="summary-controls">
+            <div class="selection-summary">
+                <div class="summary-item">
+                    <span class="summary-label">درس انتخاب شده:</span>
+                    <span class="summary-value" id="selectedCount">۰</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">جمع واحد:</span>
+                    <span class="summary-value" id="totalUnits">۰</span>
+                </div>
+                <div class="summary-item summary-limit">
+                    <span class="summary-label">حد مجاز:</span>
+                    <span class="summary-value" id="limitUnits">۲۰</span>
+                </div>
+            </div>
+
+            <div class="controls-wrapper">
+                <button class="control-btn primary" id="btnComboGen">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 3v3m0 12v3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1M3 12h3m12 0h3M5.6 18.4l2.1-2.1m8.6-8.6 2.1-2.1"></path>
+                        <circle cx="12" cy="12" r="4"></circle>
+                    </svg>
+                    <span>تولیدکننده ترکیب</span>
+                </button>
+                <button class="control-btn primary" id="btnViewList">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="8" y1="6" x2="21" y2="6"></line>
+                        <line x1="8" y1="12" x2="21" y2="12"></line>
+                        <line x1="8" y1="18" x2="21" y2="18"></line>
+                        <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                        <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                        <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                    </svg>
+                    <span>لیست دروس</span>
+                </button>
+
+                <button class="control-btn secondary" id="btnExportPDF">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                    </svg>
+                    <span>خروجی PDF</span>
+                </button>
+
+                <button class="control-btn secondary" id="btnCopyTable">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                    <span>کپی برنامه</span>
+                </button>
+
+                <button class="control-btn secondary" id="btnShareLink">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="18" cy="5" r="3"></circle>
+                        <circle cx="6" cy="12" r="3"></circle>
+                        <circle cx="18" cy="19" r="3"></circle>
+                        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                        <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+                    </svg>
+                    <span>اشتراک لینک</span>
+                </button>
+
+                <button class="control-btn secondary" id="btnCustomData">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    <span>دیتای دلخواه</span>
+                </button>
+
+                <button class="control-btn danger" id="btnReset">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                    <span>ریست</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- ===== WORKSPACE: PANEL (DESKTOP) + SCHEDULE ===== -->
+        <div class="workspace">
+
+            <!-- Advanced filter drawer (opens to the right of the panel, pushes the schedule) -->
+            <aside class="filter-drawer" id="filterDrawer" aria-hidden="true">
+                <div class="filter-drawer-header">
+                    <h4 class="filter-drawer-title">فیلترهای پیشرفته</h4>
+                    <button class="filter-drawer-close" id="filterDrawerClose" aria-label="بستن">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+                <div class="filter-drawer-body" id="filterDrawerBar"><!-- Filled by JS --></div>
+            </aside>
+
+            <!-- Desktop side panel -->
+            <aside class="courses-panel" id="coursesPanel">
+                <div class="panel-header">
+                    <h3 class="panel-title">دروس ارائه‌شده</h3>
+                    <span class="panel-count" id="panelCount">۰</span>
+                </div>
+
+                <div class="panel-search">
+                    <svg class="panel-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="m21 21-4.35-4.35"></path>
+                    </svg>
+                    <input type="text" id="panelSearch" class="panel-search-input" placeholder="جستجو..." autocomplete="off">
+                    <button class="panel-search-clear" id="panelSearchClear" aria-label="پاک کردن">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                    <button class="panel-filter-toggle" id="panelFilterToggle" aria-label="فیلترهای پیشرفته" title="فیلترهای پیشرفته">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                        </svg>
+                        <span class="panel-filter-badge hidden" id="panelFilterBadge">۰</span>
+                    </button>
+                </div>
+
+                <div class="panel-list" id="panelList">
+                    <!-- Filled by JS -->
+                </div>
+            </aside>
+
+            <!-- Schedule -->
+            <section class="schedule-section">
+                <div class="schedule-container" id="scheduleContainer">
+                    <div class="schedule-header">
+                        <h2 class="schedule-title">جدول زمان‌بندی</h2>
+                        <button class="fit-close-btn" id="btnFitClose" type="button" aria-label="بازگشت از حالت تمام‌صفحه">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                            بازگشت
+                        </button>
+                        <div class="units-flag" id="unitsFlag">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                                <line x1="12" y1="9" x2="12" y2="13"></line>
+                                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                            </svg>
+                            <span id="unitsFlagText">جمع واحدها از ۲۰ واحد مجاز بیشتر شده است!</span>
+                        </div>
+                        <button class="fit-table-btn" id="btnFitTable" title="نمایش کل جدول در صفحه" aria-pressed="false">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="3 9 3 3 9 3"></polyline>
+                                <polyline points="15 3 21 3 21 9"></polyline>
+                                <polyline points="21 15 21 21 15 21"></polyline>
+                                <polyline points="9 21 3 21 3 15"></polyline>
+                            </svg>
+                            <span class="fit-table-text">کل جدول</span>
+                        </button>
+                    </div>
+
+                    <div class="table-wrapper">
+                        <table class="schedule-table" id="scheduleTable">
+                            <thead>
+                                <tr class="time-header">
+                                    <th class="day-header">روز / ساعت</th>
+                                    <th>07:00</th>
+                                    <th>08:00</th>
+                                    <th>09:00</th>
+                                    <th>10:00</th>
+                                    <th>11:00</th>
+                                    <th>12:00</th>
+                                    <th>13:00</th>
+                                    <th>14:00</th>
+                                    <th>15:00</th>
+                                    <th>16:00</th>
+                                    <th>17:00</th>
+                                    <th>18:00</th>
+                                    <th>19:00</th>
+                                    <th>20:00</th>
+                                </tr>
+                            </thead>
+                            <tbody id="scheduleBody">
+                                <!-- Rows will be generated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+        </div>
+
+        <!-- ===== MOBILE FLOATING ACTION DOCK (fixed, detached from bottom, phones only) ===== -->
+        <nav class="mobile-action-bar" id="mobileActionBar" aria-label="عملیات جدول">
+            <button type="button" class="bar-btn primary" id="btnComboGenM">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 3v3m0 12v3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1M3 12h3m12 0h3M5.6 18.4l2.1-2.1m8.6-8.6 2.1-2.1"></path>
+                    <circle cx="12" cy="12" r="4"></circle>
+                </svg>
+                <span>ترکیب‌ساز</span>
+            </button>
+            <button type="button" class="bar-btn" id="btnViewListM">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="8" y1="6" x2="21" y2="6"></line>
+                    <line x1="8" y1="12" x2="21" y2="12"></line>
+                    <line x1="8" y1="18" x2="21" y2="18"></line>
+                    <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                    <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                    <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                </svg>
+                <span>لیست دروس</span>
+            </button>
+            <button type="button" class="bar-btn" id="btnExportPDFM">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                </svg>
+                <span>خروجی PDF</span>
+            </button>
+            <button type="button" class="bar-btn" id="btnCopyTableM">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+                <span>کپی برنامه</span>
+            </button>
+            <button type="button" class="bar-btn" id="btnShareLinkM">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="18" cy="5" r="3"></circle>
+                    <circle cx="6" cy="12" r="3"></circle>
+                    <circle cx="18" cy="19" r="3"></circle>
+                    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+                </svg>
+                <span>اشتراک لینک</span>
+            </button>
+            <button type="button" class="bar-btn" id="btnCustomDataM">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="17 8 12 3 7 8"></polyline>
+                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+                <span>دیتای دلخواه</span>
+            </button>
+            <button type="button" class="bar-btn danger" id="btnResetM">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
+                <span>ریست</span>
+            </button>
+        </nav>
+
+    </main>
+
+    <!-- ==================== FOOTER ==================== -->
+    <footer class="app-footer">
+        <div class="footer-content">
+            <p class="footer-text" id="footerText"></p>
+            <a href="#" class="footer-link" id="footerLink" target="_blank"></a>
+        </div>
+    </footer>
+
+    <!-- ==================== MODALS ==================== -->
+
+    <!-- Mobile Search & Filter Modal -->
+    <div class="modal-overlay search-modal-overlay" id="searchModal">
+        <div class="search-modal" role="dialog" aria-modal="true" aria-label="جستجو و فیلتر دروس">
+            <div class="search-modal-header">
+                <div class="search-input-wrapper">
+                    <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="m21 21-4.35-4.35"></path>
+                    </svg>
+                    <input
+                        type="text"
+                        id="searchInput"
+                        class="search-input"
+                        placeholder="جستجوی درس یا استاد..."
+                        autocomplete="off"
+                    >
+                    <button class="search-clear" id="searchClear" aria-label="پاک کردن">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+                <button class="search-modal-close" id="searchModalClose" aria-label="بستن">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Advanced filters (shared, mobile) -->
+            <div class="filter-bar" id="filterBarMobile"><!-- Filled by JS --></div>
+
+            <!-- Search Results -->
+            <div class="search-results" id="searchResults">
+                <div class="results-header">
+                    <span class="results-count" id="resultsCount"></span>
+                </div>
+                <div class="results-list" id="resultsList"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Course Info Modal -->
+    <div class="modal-overlay" id="courseModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">اطلاعات درس</h3>
+                <button class="modal-close" id="closeCourseModal">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body" id="courseModalBody">
+                <!-- Content filled by JS -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn-danger" id="btnRemoveCourse">حذف از برنامه</button>
+                <button class="btn-secondary" id="btnCloseCourseModal">بستن</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Selected Courses List Modal -->
+    <div class="modal-overlay" id="listModal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3 class="modal-title">دروس انتخاب شده</h3>
+                <button class="modal-close" id="closeListModal">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="selected-list" id="selectedList">
+                    <!-- Content filled by JS -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="btnCloseListModal">بستن</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Data Modal -->
+    <div class="modal-overlay" id="customDataModal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3 class="modal-title">ورود دیتای دلخواه</h3>
+                <button class="modal-close" id="closeCustomDataModal">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Tabs -->
+            <div class="modal-tabs" role="tablist">
+                <button class="modal-tab active" id="tabDataImport" role="tab" aria-selected="true" aria-controls="paneDataImport">وارد کردن دیتا</button>
+                <button class="modal-tab" id="tabDataGuide" role="tab" aria-selected="false" aria-controls="paneDataGuide">آموزش وارد کردن دیتا</button>
+            </div>
+
+            <!-- Tab 1: import -->
+            <div class="modal-tab-pane active" id="paneDataImport" role="tabpanel">
+                <div class="modal-body">
+                    <p class="custom-data-hint">
+                        کد HTML جدول دروس (مشابه خروجی سایت آموزش / فایل <span class="code-hint">example.txt</span>) را در کادر زیر قرار دهید.
+                        پس از بارگذاری، لیست دروس از دیتای جدید ساخته می‌شود و دیتای پیش‌فرض غیرفعال خواهد شد.
+                        <strong class="custom-data-warning">توجه: با بارگذاری دیتای جدید، تمام دروس انتخاب‌شده‌ی قبلی حذف و جدول زمان‌بندی از ابتدا ریست می‌شود.</strong>
+                    </p>
+                    <textarea id="customDataInput" class="custom-data-textarea" dir="ltr" spellcheck="false" placeholder="&lt;table&gt;...&lt;/table&gt;"></textarea>
+                    <div class="custom-data-status" id="customDataStatus"></div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-secondary" id="btnRestoreDefault">بازگشت به دیتای پیش‌فرض</button>
+                    <button class="btn-primary" id="btnLoadCustomData">بارگذاری دیتا</button>
+                </div>
+            </div>
+
+            <!-- Tab 2: guide -->
+            <div class="modal-tab-pane" id="paneDataGuide" role="tabpanel">
+                <div class="modal-body">
+                    <ol class="guide-steps">
+                        <li class="guide-step">
+                            <span class="guide-step-num">۱</span>
+                            <div class="guide-step-body">
+                                <strong>وارد پورتال دانشجویی شوید.</strong>
+                                به <a class="guide-link" href="https://pooya.sadjad.ac.ir/gateway/PuyaAuthenticate.php" target="_blank" rel="noopener noreferrer">سایت دانشگاه (پویا)</a> بروید و با حساب دانشجویی خود لاگین کنید.
+                            </div>
+                        </li>
+                        <li class="guide-step">
+                            <span class="guide-step-num">۲</span>
+                            <div class="guide-step-body">
+                                <strong>جدول دروس را باز کنید.</strong>
+                                از منوی <em>مالی</em> به بخش <em>دروس ارائه شده ترم</em> بروید و لیست دروس ترم مربوطه را انتخاب و <em>لود</em> کنید.
+                            </div>
+                        </li>
+                        <li class="guide-step">
+                            <span class="guide-step-num">۳</span>
+                            <div class="guide-step-body">
+                                <strong>Inspect بگیرید.</strong>
+                                روی جدول راست‌کلیک کنید و <em>Inspect</em> (یا کلید <kbd class="kbd">F12</kbd>) را بزنید تا ابزار توسعه‌دهنده باز شود.
+                            </div>
+                        </li>
+                        <li class="guide-step">
+                            <span class="guide-step-num">۴</span>
+                            <div class="guide-step-body">
+                                <strong>کد جدول را پیدا کنید.</strong>
+                                با ابزار <em>انتخاب المنت</em> (<kbd class="kbd">Ctrl</kbd>+<kbd class="kbd">Shift</kbd>+<kbd class="kbd">C</kbd>) روی جدول کلیک کنید؛ تگ <span class="code-hint">&lt;table&gt;</span> مربوطه در کد هایلایت می‌شود.
+                            </div>
+                        </li>
+                        <li class="guide-step">
+                            <span class="guide-step-num">۵</span>
+                            <div class="guide-step-body">
+                                <strong>کپی و پیست کنید.</strong>
+                                روی تگ جدول راست‌کلیک و <em>Copy → Copy outerHTML</em> بزنید، سپس کد را در تب «وارد کردن دیتا» پیست کرده و <em>بارگذاری دیتا</em> را بزنید.
+                            </div>
+                        </li>
+                    </ol>
+
+                    <button class="btn-secondary guide-video-btn" id="btnGuideVideo">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                            <polygon points="5 3 19 12 5 21 5 3" fill="currentColor" stroke="none"></polygon>
+                        </svg>
+                        نمایش آموزش ویدیویی
+                    </button>
+                    <div class="guide-video-wrap" id="guideVideoWrap" hidden>
+                        <video id="guideVideoFrame" controls playsinline preload="metadata" title="آموزش وارد کردن دیتا"></video>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Data Freshness Notice (shown once per page load) -->
+    <div class="modal-overlay" id="freshnessModal">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h3 class="modal-title">قبل از انتخاب درس</h3>
+                <button class="modal-close" id="closeFreshnessModal">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body freshness-body">
+                <div class="conflict-icon freshness-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                </div>
+                <p class="conflict-message">
+                    اطلاعات دروس ممکن است به‌روز نباشد. پیش از ثبت‌نام، جدول ارائه‌ی ترم را حتماً با پورتال دانشگاه تطبیق دهید.
+                </p>
+                <p class="freshness-update-line">
+                    آخرین به‌روزرسانی دیتای این ابزار: <strong id="freshnessLastUpdate">—</strong>
+                </p>
+                <label class="filter-field freshness-degree-field">
+                    <span>مقطع تحصیلی شما</span>
+                    <select id="degreeSelect">
+                        <option value="">همه مقاطع</option>
+                    </select>
+                </label>
+                <div class="freshness-hint">
+                    برای وارد کردن دیتای لحظه‌ای خودتان، از دکمه‌ی
+                    <span class="code-hint">دیتای دلخواه</span>
+                    استفاده کنید — آموزش گام‌به‌گام هم داخل همان پنجره قرار دارد.
+                </div>
+            </div>
+            <div class="modal-footer freshness-footer">
+                <button class="btn-primary" id="btnOpenCustomDataFreshness">وارد کردن دیتای جدید</button>
+                <button class="btn-secondary" id="btnCloseFreshness">متوجه شدم</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Conflict Alert Modal -->
+    <div class="modal-overlay" id="conflictModal">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h3 class="modal-title">تداخل زمانی</h3>
+                <button class="modal-close" id="closeConflictModal">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="conflict-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                        <line x1="12" y1="9" x2="12" y2="13"></line>
+                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                    </svg>
+                </div>
+                <p class="conflict-message" id="conflictMessage"></p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="btnCloseConflictModal">متوجه شدم</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Combo Generator Modal (demo feature) -->
+    <div class="modal-overlay" id="comboModal">
+        <div class="modal-content modal-large combo-modal">
+            <div class="modal-header">
+                <h3 class="modal-title">تولیدکننده ترکیب برنامه</h3>
+                <button class="modal-close" id="closeComboModal">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="modal-body combo-body">
+                <!-- Step 1: pick desired courses -->
+                <section class="combo-step">
+                    <h4 class="combo-step-title"><span class="combo-step-num">۱</span> دروس مطلوب ترم را علامت بزنید</h4>
+                    <p class="combo-hint">از هر درس، همه گروه‌های موجود به‌عنوان جایگزین در نظر گرفته می‌شوند.</p>
+                    <div class="combo-picker">
+                        <input type="text" id="comboSearch" class="combo-search" placeholder="جستجوی درس برای افزودن..." autocomplete="off">
+                        <div class="combo-search-results" id="comboSearchResults" hidden></div>
+                    </div>
+                    <div class="combo-wanted" id="comboWanted">
+                        <!-- Chips of desired courses, filled by JS -->
+                    </div>
+                </section>
+
+                <!-- Step 2: passed courses -->
+                <section class="combo-step">
+                    <h4 class="combo-step-title"><span class="combo-step-num">۲</span> دروس پاس‌شده (اختیاری)</h4>
+                    <p class="combo-hint">دروسی که قبلاً پاس کرده‌اید علامت بزنید — در پیشنهادها و ترکیب‌ها حساب نمی‌شوند و از لیست جستجو هم حذف می‌شوند.</p>
+                    <div class="combo-passed-tools">
+                        <input type="text" id="comboPassedSearch" class="combo-search" placeholder="جستجوی درس برای علامت زدن پاس‌شده..." autocomplete="off">
+                        <div class="combo-search-results" id="comboPassedResults" hidden></div>
+                    </div>
+                    <div class="combo-passed-count" id="comboPassedCount">هیچ درسی علامت نخورده</div>
+                </section>
+
+                <!-- Step 3: generate -->
+                <section class="combo-step">
+                    <h4 class="combo-step-title"><span class="combo-step-num">۳</span> تولید ترکیب‌ها</h4>
+                    <div class="combo-gen-row">
+                        <button class="btn-primary" id="btnGenerateCombos">تولید ترکیب‌های بدون تداخل</button>
+                        <button class="btn-secondary" id="btnClearCombo">پاک کردن همه</button>
+                    </div>
+                    <div class="combo-results" id="comboResults">
+                        <!-- Results filled by JS -->
+                    </div>
+                </section>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn-secondary" id="btnCloseComboFooter">بستن</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- ==================== SCRIPTS ==================== -->
+    <script src="combo.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
