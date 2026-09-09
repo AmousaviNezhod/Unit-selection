@@ -2938,6 +2938,41 @@ body.modal-open {
     pointer-events: none; /* children re-enable so the bar never blocks taps */
 }
 
+/* Pill dock: quick actions inline, FAB is the pill's rounded end */
+.dock-pill {
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end; /* RTL: FAB ends up on the left end */
+    gap: var(--space-2);
+    width: fit-content;
+    margin-inline: auto; /* center the pill */
+    background-color: rgba(20, 20, 20, 0.97);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    border: 2px solid var(--border-primary);
+    border-radius: 999px;
+    padding: 6px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+}
+
+.dock-pill-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border-radius: 50%;
+    background-color: transparent;
+    border: none;
+    color: var(--text-primary);
+    font-size: 11px;
+}
+.dock-pill-btn:active { background-color: var(--bg-hover); }
+.dock-pill-btn svg { width: 21px; height: 21px; }
+.dock-pill-btn.danger { color: #f87171; }
+
 .dock-fab {
     pointer-events: auto;
     display: flex;
@@ -2948,8 +2983,8 @@ body.modal-open {
     margin-right: auto; /* RTL: park the FAB on the left edge */
     background-color: var(--text-primary);
     color: var(--bg-primary);
-    border: 2px solid var(--border-primary);
-    border-radius: 50%;
+    border: none;
+    border-radius: 999px;
     cursor: pointer;
     box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
     transition: transform var(--transition-fast);
