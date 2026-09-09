@@ -220,3 +220,109 @@
     .io-mode-row { width: 100%; margin-bottom: 8px; }
     .modal-footer#ioImportFooter { flex-wrap: wrap; }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   AI PLANNER (برنامه‌ریزی با هوش مصنوعی)
+   Reuses .io-textarea / .io-actions / .combo-search styles.
+   ═══════════════════════════════════════════════════════════════ */
+.aiplan-modal .aiplan-body {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    max-height: 65vh;
+    overflow-y: auto;
+}
+.aiplan-step {
+    border: 1px solid var(--border-color, #2a2a2a);
+    border-radius: 12px;
+    padding: 14px 16px;
+    background: var(--bg-secondary, #141414);
+}
+.aiplan-step-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 6px;
+    font-size: 15px;
+    font-weight: 700;
+}
+.aiplan-step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--primary, #6366f1);
+    color: #fff;
+    font-size: 13px;
+    flex-shrink: 0;
+}
+.aiplan-hint {
+    margin: 0 0 10px;
+    font-size: 12.5px;
+    color: var(--text-muted, #888);
+}
+
+/* Check rows (prereq toggle + priorities) */
+.aiplan-priorities {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 4px 16px;
+}
+.aiplan-check-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 6px 4px;
+    font-size: 13px;
+    cursor: pointer;
+    border-radius: 8px;
+}
+.aiplan-check-row:hover { background: rgba(255, 255, 255, 0.04); }
+.aiplan-check-row input { margin-top: 3px; flex-shrink: 0; }
+
+/* Prereq corner note (missing-in-data list) */
+.aiplan-note {
+    margin-top: 8px;
+    font-size: 12px;
+    color: #fbbf24;
+    line-height: 1.9;
+}
+.aiplan-note:empty { display: none; }
+.aiplan-note .aiplan-note-missing { color: #f87171; }
+
+/* Passed chips */
+.aiplan-passed { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.aiplan-passed:empty { display: none; }
+.aiplan-passed .combo-chip { background: rgba(16, 185, 129, 0.12); }
+
+/* Unit/count fields */
+.aiplan-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+.aiplan-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--text-muted, #888);
+    flex: 1 1 120px;
+}
+.aiplan-field input {
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color, #2a2a2a);
+    background: var(--bg-primary, #0a0a0a);
+    color: var(--text-primary, #fff);
+    font-family: inherit;
+    font-size: 14px;
+}
+.aiplan-field input:focus { outline: none; border-color: var(--primary, #6366f1); }
+
+@media (max-width: 640px) {
+    .aiplan-modal .aiplan-body { max-height: 55vh; }
+    .aiplan-priorities { grid-template-columns: 1fr; }
+}

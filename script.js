@@ -207,6 +207,7 @@ const elements = {
     btnCloseCostModal: document.getElementById('btnCloseCostModal'),
 
     // Controls
+    btnAiPlan: document.getElementById('btnAiPlan'),
     btnViewList: document.getElementById('btnViewList'),
     btnCopyTable: document.getElementById('btnCopyTable'),
     btnExportPDF: document.getElementById('btnExportPDF'),
@@ -219,6 +220,11 @@ const elements = {
     btnIoM: document.getElementById('btnIoM'),
 
     // Mobile bottom action bar (phone-only mirror of the controls above)
+    mobileActionBar: document.getElementById('mobileActionBar'),
+    dockFab: document.getElementById('dockFab'),
+    dockSheet: document.getElementById('dockSheet'),
+    dockBackdrop: document.getElementById('dockBackdrop'),
+    btnAiPlanM: document.getElementById('btnAiPlanM'),
     btnViewListM: document.getElementById('btnViewListM'),
     btnCopyTableM: document.getElementById('btnCopyTableM'),
     btnExportPDFM: document.getElementById('btnExportPDFM'),
@@ -315,6 +321,22 @@ const elements = {
     ioModeAdd: document.getElementById('ioModeAdd'),
     ioModeReplace: document.getElementById('ioModeReplace'),
     btnIoApply: document.getElementById('btnIoApply'),
+
+    // AI planner modal (برنامه‌ریزی با هوش مصنوعی)
+    aiPlanModal: document.getElementById('aiPlanModal'),
+    closeAiPlanModal: document.getElementById('closeAiPlanModal'),
+    btnCloseAiPlanFooter: document.getElementById('btnCloseAiPlanFooter'),
+    aiPassedSearch: document.getElementById('aiPassedSearch'),
+    aiPassedResults: document.getElementById('aiPassedResults'),
+    aiPassedChips: document.getElementById('aiPassedChips'),
+    aiPrereqToggle: document.getElementById('aiPrereqToggle'),
+    aiPrereqNote: document.getElementById('aiPrereqNote'),
+    aiPriorities: document.getElementById('aiPriorities'),
+    aiMinUnits: document.getElementById('aiMinUnits'),
+    aiMaxUnits: document.getElementById('aiMaxUnits'),
+    aiPlanCount: document.getElementById('aiPlanCount'),
+    aiPromptBox: document.getElementById('aiPromptBox'),
+    btnAiCopyPrompt: document.getElementById('btnAiCopyPrompt'),
 
     // Toast
     toastContainer: document.getElementById('toastContainer')
@@ -3131,6 +3153,331 @@ function setupIoFeature() {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// MOBILE DOCK (FAB + bottom-sheet menu, phones only)
+// ═══════════════════════════════════════════════════════════════
+
+function isDockOpen() {
+    return elements.mobileActionBar && elements.mobileActionBar.classList.contains('open');
+}
+
+function openDockMenu() {
+    elements.mobileActionBar.classList.add('open');
+    elements.dockFab.setAttribute('aria-expanded', 'true');
+}
+
+function closeDockMenu() {
+    if (!elements.mobileActionBar) return;
+    elements.mobileActionBar.classList.remove('open');
+    elements.dockFab.setAttribute('aria-expanded', 'false');
+}
+
+function setupDockMenu() {
+    if (!elements.dockFab) return;
+    elements.dockFab.addEventListener('click', () => {
+        isDockOpen() ? closeDockMenu() : openDockMenu();
+    });
+    elements.dockBackdrop.addEventListener('click', closeDockMenu);
+    // Every action inside the sheet closes it first, then runs its own listener
+    elements.dockSheet.addEventListener('click', (e) => {
+        if (e.target.closest('.bar-btn')) closeDockMenu();
+    });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// AI PLANNER (برنامه‌ریزی با هوش مصنوعی)
+// User marks passed courses, picks priorities + unit range + how
+// many schedules, then gets an optimized Persian prompt carrying
+// the FULL course dataset (degree-filtered) for an AI to solve.
+// The AI answers in the schedule-import format so the user can
+// paste it into ورود/خروجی برنامه ← ورود برنامه.
+// ═══════════════════════════════════════════════════════════════
+
+const AI_PLAN_KEY = 'university_scheduler_ai_plan';
+const AI_PLAN_PREREQS = [
+    // [course name in dataset, prerequisite name in dataset]
+    ['محیط های چندرسانه ای', 'نرم افزارهای گرافیکی'],
+    ['برنامه نویسی مبتنی بروب', 'طراحی وب'],
+    ['برنامه نویسی موبایل1', 'برنامه سازی پیشرفته'],
+    ['ساختمان داده ها', 'برنامه سازی پیشرفته'],
+    ['برنامه نویسی موبایل2', 'برنامه نویسی موبایل1'],
+    ['مباحث ویژه دربرنامه نویسی', 'برنامه نویسی موبایل1'],
+    ['آزمایشگاه سیستم عامل', 'سیستم عامل'],
+    ['آزمایشگاه پایگاه داده ها', 'پایگاه داده ها'],
+    ['برنامه نویسی سخت افزار', 'مدارمنطقی'],
+    ['کارگاه شبکه های کامپیوتری', 'مبانی شبکه های کامپیوتری'],
+    ['زبان فنی', 'زبان خارجی']
+];
+
+const aiPlanState = {
+    passed: [],          // course codes marked as already passed
+    lastPrompt: ''
+};
+
+function loadAiPlanState() {
+    try {
+        const saved = JSON.parse(localStorage.getItem(AI_PLAN_KEY) || '{}');
+        if (Array.isArray(saved.passed)) aiPlanState.passed = saved.passed;
+    } catch (e) { aiPlanState.passed = []; }
+}
+
+function saveAiPlanState() {
+    try {
+        localStorage.setItem(AI_PLAN_KEY, JSON.stringify({ passed: aiPlanState.passed }));
+    } catch (e) { /* noop */ }
+}
+
+/** One representative course per code (first group) — picker + chips + data dump */
+function aiPlanReps(pool) {
+    const seen = new Set();
+    return pool.filter(c => {
+        if (seen.has(c.code)) return false;
+        seen.add(c.code);
+        return true;
+    });
+}
+
+/** Courses offered for the passed-marker search (hide already-marked) */
+function aiPassedCandidates(query) {
+    const q = query.trim().toLowerCase();
+    const passedSet = new Set(aiPlanState.passed);
+    return aiPlanReps(getListCourses()).filter(c => {
+        if (passedSet.has(c.code)) return false;
+        if (!q) return true;
+        return c.name.toLowerCase().includes(q) ||
+               c.professor.toLowerCase().includes(q) ||
+               c.code.includes(q);
+    }).slice(0, 12);
+}
+
+function renderAiPassedChips() {
+    const wrap = elements.aiPassedChips;
+    if (!wrap) return;
+    const reps = aiPlanState.passed
+        .map(code => getListCourses().find(c => c.code === code))
+        .filter(Boolean);
+    wrap.innerHTML = reps.map(c => `
+        <span class="combo-chip">
+            ${escapeHtml(c.name)}
+            <button type="button" class="combo-chip-remove" data-code="${escapeHtml(c.code)}" title="حذف">✕</button>
+        </span>`).join('');
+    wrap.querySelectorAll('.combo-chip-remove').forEach(btn => {
+        btn.addEventListener('click', () => {
+            aiPlanState.passed = aiPlanState.passed.filter(code => code !== btn.dataset.code);
+            saveAiPlanState();
+            renderAiPassedChips();
+            updateAiPrereqNote();
+        });
+    });
+}
+
+/**
+ * Corner note: with the prereq toggle ON, list courses whose prerequisite is
+ * NOT in the passed set — those will be excluded from the AI's candidate list.
+ * Also flags prereq names that don't exist in the current dataset at all.
+ */
+function updateAiPrereqNote() {
+    const note = elements.aiPrereqNote;
+    if (!note) return;
+    if (!elements.aiPrereqToggle.checked) {
+        note.innerHTML = '';
+        return;
+    }
+    const passedSet = new Set(aiPlanState.passed);
+    const nameToCode = {};
+    aiPlanReps(getListCourses()).forEach(c => { nameToCode[c.name] = c.code; });
+
+    const blocked = [];
+    const missingInData = [];
+    AI_PLAN_PREREQS.forEach(([course, prereq]) => {
+        const prereqCode = nameToCode[prereq];
+        if (prereqCode && !passedSet.has(prereqCode)) blocked.push(`${course} ← پیش‌نیاز: ${prereq}`);
+        if (!prereqCode && !missingInData.includes(prereq)) missingInData.push(prereq);
+    });
+
+    let html = '';
+    if (blocked.length) {
+        html += `<div class="aiplan-note-missing">این دروس به‌دلیل نبودن پیش‌نیاز در پاس‌شده‌ها از لیست حذف می‌شوند:<br>${blocked.map(escapeHtml).join('<br>')}</div>`;
+    }
+    if (missingInData.length) {
+        html += `<div class="aiplan-note-missing">پیش‌نیازهای زیر در دیتای فعلی وجود ندارند (درس متناظرشان حذف نمی‌شود): ${missingInData.map(escapeHtml).join('، ')}</div>`;
+    }
+    note.innerHTML = html;
+}
+
+/** Degree scope for the prompt's course dump: '' = all degrees allowed */
+function aiPlanDegreeScope() {
+    return state.degree;
+}
+
+/** Full course-info dump for the AI (one compact block per course group) */
+function buildAiCourseData() {
+    const pool = getListCourses(); // active dataset (custom or default), degree-filtered
+    return pool.map(c => {
+        const price = getCoursePrice(c);
+        return {
+            code: c.code,
+            group: c.group,
+            name: c.name,
+            units: c.units,
+            degree: c.degree,
+            professor: c.professor,
+            capacity: c.capacity,
+            registered: c.registered,
+            schedule: c.schedule.map(slotToExport),
+            price_toman: price ? Math.round(price / 10) : null
+        };
+    });
+}
+
+/** Build the ready-to-send Persian prompt from the user's choices */
+function buildAiPrompt() {
+    const passedSet = new Set(aiPlanState.passed);
+    const prereqOn = elements.aiPrereqToggle.checked;
+    const degree = aiPlanDegreeScope();
+
+    // Candidate courses = everything except passed codes; prereq check drops
+    // courses whose prerequisite isn't in the passed set
+    const nameToCode = {};
+    aiPlanReps(getListCourses()).forEach(c => { nameToCode[c.name] = c.code; });
+
+    const available = aiPlanReps(getListCourses()).filter(c => {
+        if (passedSet.has(c.code)) return false;
+        if (!prereqOn) return true;
+        const prereq = AI_PLAN_PREREQS.find(([course]) => course === c.name);
+        if (!prereq) return true;
+        const prereqCode = nameToCode[prereq[1]];
+        return prereqCode ? passedSet.has(prereqCode) : true; // prereq not in data → keep
+    });
+
+    const courses = buildAiCourseData().filter(c => available.some(a => a.code === c.code));
+
+    const priorities = Array.from(elements.aiPriorities.querySelectorAll('input:checked'))
+        .map(box => box.closest('.aiplan-check-row').querySelector('span').textContent.trim());
+    const priorityText = priorities.length
+        ? priorities.map((p, i) => `${i + 1}. ${p}`).join('\n')
+        : 'هیچ اولویت خاصی انتخاب نشده — بهترین برنامه ممکن را بچین.';
+
+    const minUnits = parseInt(elements.aiMinUnits.value, 10) || 0;
+    const maxUnits = parseInt(elements.aiMaxUnits.value, 10) || CONFIG.MAX_UNITS;
+    const planCount = Math.max(1, parseInt(elements.aiPlanCount.value, 10) || 1);
+
+    const passedNames = aiPlanState.passed
+        .map(code => getListCourses().find(c => c.code === code))
+        .filter(Boolean)
+        .map(c => c.name);
+
+    const prereqBlock = prereqOn
+        ? `\nپیش‌نیازهای دروس (درس ← پیش‌نیاز):\n${AI_PLAN_PREREQS.map(([course, prereq]) => `- ${course} ← ${prereq}`).join('\n')}\n`
+        : '';
+
+    return `من دانشجوی دانشگاه سجاد هستم و می‌خواهم برنامه هفتگی ترمم را بچینی.
+
+مقطع تحصیلی: ${degree ? degree : 'همه مقاطع — می‌توانی از هر مقطعی درس انتخاب کنی'}
+تعداد برنامه‌ی درخواستی: ${planCount} برنامه
+جمع واحدهای هر برنامه: بین ${minUnits} و ${maxUnits} واحد
+
+اولویت‌های من به ترتیب:
+${priorityText}
+${prereqBlock}
+دروس پاس‌شده (اجازه نداری هیچ‌کدام را پیشنهاد دهی):
+${passedNames.length ? passedNames.map(n => '- ' + n).join('\n') : '- (چیزی علامت نخورده)'}
+
+قوانین:
+1. فقط از دروس موجود در JSON «دروس ارائه‌شده» زیر استفاده کن — هیچ درس یا کدی از دانش خودت اضافه نکن.
+2. کد درس، گروه، نام، استاد، واحد و زمان‌های کلاس را دقیقاً همان‌طور که در JSON هست کپی کن؛ هیچ زمان یا استادی را عوض نکن.
+3. بین دروس هر برنامه هیچ تداخل زمانی نباشد (دو کلاس هم‌زمان ممنوع؛ کلاس‌های زوج/فرد با برچسب parity می‌توانند هم‌زمان باشند).
+4. جمع واحدهای هر برنامه حتماً بین ${minUnits} و ${maxUnits} باشد.
+5. ${planCount > 1 ? `دقیقاً ${planCount} برنامه‌ی متفاوت و بدون تداخل پیشنهاد بده (گروه‌های متفاوت از یک درس = برنامه‌های متفاوت).` : 'یک برنامه‌ی بهینه پیشنهاد بده.'}
+6. خروجی را فقط به‌صورت JSON بده با دقیقاً این ساختار و هیچ متن اضافه‌ای ننویس:
+{
+  "format": "unit-selection-schedule",
+  "version": 1,
+  "courses": [
+    { "code": "315002", "group": "1", "name": "نام درس", "units": 3, "professor": "نام استاد", "schedule": [ { "day": "شنبه", "start": "10:00", "end": "12:00", "parity": "زوج" } ] }
+  ]
+}
+  (پارامتر parity اختیاری است و فقط برای کلاس‌های هفته‌درمیان «زوج» یا «فرد» می‌آید.)
+
+دروس ارائه‌شده (JSON کامل):
+${JSON.stringify(courses, null, 2)}`;
+}
+
+function refreshAiPrompt() {
+    aiPlanState.lastPrompt = buildAiPrompt();
+    elements.aiPromptBox.value = aiPlanState.lastPrompt;
+}
+
+function openAiPlanModal() {
+    renderAiPassedChips();
+    updateAiPrereqNote();
+    refreshAiPrompt();
+    elements.aiPlanModal.classList.add('active');
+}
+
+function setupAiPlanFeature() {
+    loadAiPlanState();
+
+    const open = () => openAiPlanModal();
+    if (elements.btnAiPlan) elements.btnAiPlan.addEventListener('click', open);
+    if (elements.btnAiPlanM) elements.btnAiPlanM.addEventListener('click', () => { closeDockMenu(); open(); });
+
+    elements.closeAiPlanModal.addEventListener('click', closeAllModals);
+    elements.btnCloseAiPlanFooter.addEventListener('click', closeAllModals);
+
+    // Passed-course search dropdown (same pattern as combo picker)
+    const input = elements.aiPassedSearch;
+    input.addEventListener('input', () => {
+        const q = input.value;
+        if (!q.trim()) { elements.aiPassedResults.hidden = true; return; }
+        const candidates = aiPassedCandidates(q);
+        const box = elements.aiPassedResults;
+        if (!candidates.length) {
+            box.innerHTML = '<div class="combo-search-empty">نتیجه‌ای پیدا نشد</div>';
+            box.hidden = false;
+            return;
+        }
+        box.innerHTML = candidates.map(c => `
+            <div class="combo-search-item" data-code="${escapeHtml(c.code)}">
+                <span>${escapeHtml(c.name)} <span class="combo-item-meta">${escapeHtml(c.professor)}</span></span>
+                <span class="combo-item-meta">${formatUnits(c.units)} واحد</span>
+            </div>`).join('');
+        box.hidden = false;
+        box.querySelectorAll('.combo-search-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const code = item.dataset.code;
+                if (!aiPlanState.passed.includes(code)) aiPlanState.passed.push(code);
+                saveAiPlanState();
+                renderAiPassedChips();
+                updateAiPrereqNote();
+                box.hidden = true;
+                input.value = '';
+            });
+        });
+    });
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.aiplan-picker')) elements.aiPassedResults.hidden = true;
+    });
+
+    elements.aiPrereqToggle.addEventListener('change', () => {
+        updateAiPrereqNote();
+        refreshAiPrompt();
+    });
+    elements.aiPriorities.addEventListener('change', refreshAiPrompt);
+    elements.aiMinUnits.addEventListener('input', refreshAiPrompt);
+    elements.aiMaxUnits.addEventListener('input', refreshAiPrompt);
+    elements.aiPlanCount.addEventListener('input', refreshAiPrompt);
+
+    elements.btnAiCopyPrompt.addEventListener('click', async () => {
+        try {
+            await navigator.clipboard.writeText(aiPlanState.lastPrompt);
+            showToast('پرامپت کپی شد — به هوش مصنوعی بده', 'success');
+        } catch (e) {
+            showToast('خطا در کپی کردن', 'error');
+        }
+    });
+}
+
+// ═══════════════════════════════════════════════════════════════
 // TOAST NOTIFICATIONS
 // ═══════════════════════════════════════════════════════════════
 
@@ -3385,6 +3732,7 @@ function setupEventListeners() {
         rebuildFilterBars(); // professor dropdown follows the narrowed dataset
         refreshLists();
         renderSchedule();
+        refreshAiPrompt(); // AI planner prompt follows the active degree
     });
     // "Enter your own data" jumps straight to the custom-data modal
     elements.btnOpenCustomDataFreshness.addEventListener('click', () => {
@@ -3409,7 +3757,9 @@ function setupEventListeners() {
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
-            if (isFilterDrawerOpen()) {
+            if (isDockOpen()) {
+                closeDockMenu();
+            } else if (isFilterDrawerOpen()) {
                 setFilterDrawerOpen(false);
             } else {
                 closeAllModals();
@@ -3432,6 +3782,12 @@ function setupEventListeners() {
 
     // Import/Export (ورود و خروجی برنامه)
     setupIoFeature();
+
+    // AI planner (برنامه‌ریزی با هوش مصنوعی)
+    setupAiPlanFeature();
+
+    // Mobile dock menu
+    setupDockMenu();
 }
 
 // ═══════════════════════════════════════════════════════════════

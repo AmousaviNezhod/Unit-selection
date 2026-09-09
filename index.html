@@ -117,6 +117,13 @@
             </div>
 
             <div class="controls-wrapper">
+                <button class="control-btn primary" id="btnAiPlan">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2a7 7 0 0 1 4 12.7V17a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1v-2.3A7 7 0 0 1 12 2z"></path>
+                        <line x1="9" y1="21" x2="15" y2="21"></line>
+                    </svg>
+                    <span>برنامه‌ریزی AI</span>
+                </button>
                 <button class="control-btn primary" id="btnComboGen">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M12 3v3m0 12v3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1M3 12h3m12 0h3M5.6 18.4l2.1-2.1m8.6-8.6 2.1-2.1"></path>
@@ -313,16 +320,32 @@
 
         </div>
 
-        <!-- ===== MOBILE FLOATING ACTION DOCK (fixed, detached from bottom, phones only) ===== -->
+        <!-- ===== MOBILE FLOATING ACTION DOCK (phones only) =====
+             One FAB opens a bottom-sheet menu (slides bottom → top) holding
+             every action; the sheet items keep the desktop button IDs so all
+             listeners keep working. -->
         <nav class="mobile-action-bar" id="mobileActionBar" aria-label="عملیات جدول">
-            <button type="button" class="bar-btn primary" id="btnComboGenM">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M12 3v3m0 12v3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1M3 12h3m12 0h3M5.6 18.4l2.1-2.1m8.6-8.6 2.1-2.1"></path>
-                    <circle cx="12" cy="12" r="4"></circle>
-                </svg>
-                <span>ترکیب‌ساز</span>
-            </button>
-            <button type="button" class="bar-btn" id="btnViewListM">
+            <div class="dock-backdrop" id="dockBackdrop"></div>
+
+            <div class="dock-sheet" id="dockSheet" role="dialog" aria-modal="true" aria-label="منوی عملیات">
+                <div class="dock-sheet-handle"></div>
+                <div class="dock-sheet-title">عملیات</div>
+                <div class="dock-sheet-grid">
+                    <button type="button" class="bar-btn primary" id="btnAiPlanM">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 2a7 7 0 0 1 4 12.7V17a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1v-2.3A7 7 0 0 1 12 2z"></path>
+                            <line x1="9" y1="21" x2="15" y2="21"></line>
+                        </svg>
+                        <span>برنامهریزی AI</span>
+                    </button>
+                    <button type="button" class="bar-btn primary" id="btnComboGenM">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 3v3m0 12v3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1M3 12h3m12 0h3M5.6 18.4l2.1-2.1m8.6-8.6 2.1-2.1"></path>
+                            <circle cx="12" cy="12" r="4"></circle>
+                        </svg>
+                        <span>ترکیب‌ساز</span>
+                    </button>
+                    <button type="button" class="bar-btn" id="btnViewListM">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <line x1="8" y1="6" x2="21" y2="6"></line>
                     <line x1="8" y1="12" x2="21" y2="12"></line>
@@ -388,6 +411,20 @@
                     <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                 </svg>
                 <span>ریست</span>
+            </button>
+                </div><!-- /dock-sheet-grid -->
+            </div><!-- /dock-sheet -->
+
+            <button type="button" class="dock-fab" id="dockFab" aria-expanded="false" aria-controls="dockSheet" aria-label="منوی عملیات">
+                <svg class="dock-fab-icon-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="4" y1="7" x2="20" y2="7"></line>
+                    <line x1="4" y1="12" x2="20" y2="12"></line>
+                    <line x1="4" y1="17" x2="20" y2="17"></line>
+                </svg>
+                <svg class="dock-fab-icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
             </button>
         </nav>
 
@@ -775,6 +812,91 @@
                     </div>
                     <button class="btn-primary" id="btnIoApply">اعمال برنامه</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Planner Modal (برنامه‌ریزی با هوش مصنوعی) -->
+    <div class="modal-overlay" id="aiPlanModal">
+        <div class="modal-content modal-large aiplan-modal">
+            <div class="modal-header">
+                <h3 class="modal-title">برنامه‌ریزی با هوش مصنوعی</h3>
+                <button class="modal-close" id="closeAiPlanModal">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="modal-body aiplan-body">
+                <!-- Step 1: passed courses -->
+                <section class="aiplan-step">
+                    <h4 class="aiplan-step-title"><span class="aiplan-step-num">۱</span> دروس پاس‌شده را علامت بزنید</h4>
+                    <p class="aiplan-hint">دروسی که قبلاً پاس کرده‌اید؛ مدل اجازه ندارد آنها را دوباره پیشنهاد دهد.</p>
+                    <div class="aiplan-picker">
+                        <input type="text" id="aiPassedSearch" class="combo-search" placeholder="جستجوی درس برای افزودن به پاس‌شده‌ها..." autocomplete="off">
+                        <div class="combo-search-results" id="aiPassedResults" hidden></div>
+                    </div>
+                    <div class="aiplan-passed" id="aiPassedChips"></div>
+                </section>
+
+                <!-- Step 2: prerequisites -->
+                <section class="aiplan-step">
+                    <h4 class="aiplan-step-title"><span class="aiplan-step-num">۲</span> پیش‌نیازها</h4>
+                    <label class="aiplan-check-row">
+                        <input type="checkbox" id="aiPrereqToggle">
+                        <span>محاسبه پیش‌نیازها — پیش‌نیاز هر درسِ دارای پیش‌نیاز باید در پاس‌شده‌ها باشد؛ وگرنه آن درس از لیست پیشنهادی حذف می‌شود.</span>
+                    </label>
+                    <div class="aiplan-note" id="aiPrereqNote"></div>
+                </section>
+
+                <!-- Step 3: priorities -->
+                <section class="aiplan-step">
+                    <h4 class="aiplan-step-title"><span class="aiplan-step-num">۳</span> اولویت‌های برنامه</h4>
+                    <div class="aiplan-priorities" id="aiPriorities">
+                        <label class="aiplan-check-row"><input type="checkbox" value="min-days" checked><span>کمترین روز اشغالی (متراکم‌ترین برنامه)</span></label>
+                        <label class="aiplan-check-row"><input type="checkbox" value="min-spread"><span>کمترین پخش‌شدگی (کمترین فاصله بین کلاس‌ها)</span></label>
+                        <label class="aiplan-check-row"><input type="checkbox" value="min-cost"><span>کمترین هزینه ممکن</span></label>
+                        <label class="aiplan-check-row"><input type="checkbox" value="early-finish"><span>پایان زودتر کلاس‌ها در روز</span></label>
+                        <label class="aiplan-check-row"><input type="checkbox" value="late-start"><span>شروع دیرتر کلاس‌ها در روز</span></label>
+                        <label class="aiplan-check-row"><input type="checkbox" value="avoid-sat"><span>شنبه را آزاد بگذار</span></label>
+                        <label class="aiplan-check-row"><input type="checkbox" value="no-exam-conflict"><span>جلوگیری از نزدیکی امتحان‌ها (فاصله بین روزهای امتحان)</span></label>
+                    </div>
+                </section>
+
+                <!-- Step 4: units + count -->
+                <section class="aiplan-step">
+                    <h4 class="aiplan-step-title"><span class="aiplan-step-num">۴</span> واحدها و تعداد برنامه</h4>
+                    <div class="aiplan-row">
+                        <label class="aiplan-field">
+                            <span>حداقل واحد</span>
+                            <input type="number" id="aiMinUnits" min="0" max="20" value="12">
+                        </label>
+                        <label class="aiplan-field">
+                            <span>حداکثر واحد</span>
+                            <input type="number" id="aiMaxUnits" min="1" max="20" value="20">
+                        </label>
+                        <label class="aiplan-field">
+                            <span>تعداد برنامه</span>
+                            <input type="number" id="aiPlanCount" min="1" max="10" value="3">
+                        </label>
+                    </div>
+                </section>
+
+                <!-- Step 5: prompt -->
+                <section class="aiplan-step">
+                    <h4 class="aiplan-step-title"><span class="aiplan-step-num">۵</span> پرامپت آماده</h4>
+                    <p class="aiplan-hint">این پرامپت را به هر هوش مصنوعی بده؛ خروجی JSON آن را در «ورود/خروجی برنامه ← ورود برنامه» بچسبان.</p>
+                    <textarea id="aiPromptBox" class="io-textarea" dir="rtl" readonly spellcheck="false"></textarea>
+                    <div class="io-actions">
+                        <button class="btn-primary" id="btnAiCopyPrompt">کپی پرامپت</button>
+                    </div>
+                </section>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn-secondary" id="btnCloseAiPlanFooter">بستن</button>
             </div>
         </div>
     </div>

@@ -867,33 +867,14 @@ body.modal-open {
 }
 
 /* ── Mobile floating action dock (phones only) ─────────────────
-   Mirrors the .controls-wrapper actions; floats detached from the
-   bottom edge; desktop keeps the inline buttons above the schedule */
-.mobile-action-bar {
-    display: none; /* desktop: inline buttons stay above the schedule */
-    position: fixed;
-    bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
-    left: var(--space-3);
-    right: var(--space-3);
-    z-index: var(--z-dropdown);
-    background-color: rgba(20, 20, 20, 0.92);
-    -webkit-backdrop-filter: blur(12px);
-    backdrop-filter: blur(12px);
-    border: 2px solid var(--border-primary);
-    border-radius: var(--radius-lg);
-    padding: var(--space-2);
-    justify-content: space-around;
-    gap: var(--space-1);
-    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
-}
-
+   One FAB + bottom-sheet menu; full styles live at the end of this
+   file (search "MOBILE DOCK"). Shared button styles: */
 .bar-btn {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 3px;
-    flex: 1;
     min-width: 0;
     padding: var(--space-2) 2px;
     background-color: transparent;
@@ -924,6 +905,10 @@ body.modal-open {
 
 .bar-btn.danger:active {
     background-color: rgba(239, 68, 68, 0.12);
+}
+
+.bar-btn.primary {
+    color: var(--text-primary);
 }
 
 .control-btn {
@@ -2818,10 +2803,6 @@ body.modal-open {
         display: none;
     }
 
-    .mobile-action-bar {
-        display: flex;
-    }
-
     /* Floating dock hovers above content — keep the footer reachable
        past it when scrolled to the bottom */
     .app-footer {
@@ -2940,4 +2921,121 @@ body.modal-open {
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
     }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   MOBILE DOCK — one FAB + bottom-sheet menu (phones only)
+   Replaces the cramped 9-button bar: the FAB opens a sheet that
+   slides up holding every action as a grid of labelled buttons.
+   ───────────────────────────────────────────────────────────── */
+.mobile-action-bar {
+    display: none; /* desktop: inline buttons stay above the schedule */
+    position: fixed;
+    bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+    left: var(--space-3);
+    right: var(--space-3);
+    z-index: var(--z-dropdown);
+    pointer-events: none; /* children re-enable so the bar never blocks taps */
+}
+
+.dock-fab {
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    margin-right: auto; /* RTL: park the FAB on the left edge */
+    background-color: var(--text-primary);
+    color: var(--bg-primary);
+    border: 2px solid var(--border-primary);
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+    transition: transform var(--transition-fast);
+    -webkit-tap-highlight-color: transparent;
+}
+.dock-fab:active { transform: scale(0.94); }
+.dock-fab svg { width: 24px; height: 24px; }
+.dock-fab .dock-fab-icon-close { display: none; }
+
+/* Open state: FAB flips to an X, sheet slides up, backdrop dims */
+.mobile-action-bar.open .dock-fab .dock-fab-icon-menu { display: none; }
+.mobile-action-bar.open .dock-fab .dock-fab-icon-close { display: block; }
+
+.dock-backdrop {
+    pointer-events: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    opacity: 0;
+    transition: opacity var(--transition-base);
+    z-index: -1; /* behind the bar, above the page */
+}
+.mobile-action-bar.open .dock-backdrop {
+    pointer-events: auto;
+    opacity: 1;
+}
+
+.dock-sheet {
+    pointer-events: auto;
+    position: fixed;
+    bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+    left: var(--space-3);
+    right: var(--space-3);
+    background-color: rgba(20, 20, 20, 0.97);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    border: 2px solid var(--border-primary);
+    border-radius: var(--radius-lg);
+    padding: var(--space-3);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+    transform: translateY(calc(100% + 24px)); /* hidden below the edge */
+    opacity: 0;
+    visibility: hidden;
+    transition: transform var(--transition-slow) cubic-bezier(0.16, 1, 0.3, 1),
+                opacity var(--transition-base),
+                visibility 0s linear var(--transition-slow);
+}
+.mobile-action-bar.open .dock-sheet {
+    transform: translateY(0);
+    opacity: 1;
+    visibility: visible;
+    transition: transform var(--transition-slow) cubic-bezier(0.16, 1, 0.3, 1),
+                opacity var(--transition-base);
+}
+
+.dock-sheet-handle {
+    width: 42px;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--border-secondary);
+    margin: 0 auto var(--space-2);
+}
+
+.dock-sheet-title {
+    text-align: center;
+    font-size: 12px;
+    font-weight: var(--font-semibold);
+    color: var(--text-secondary);
+    margin-bottom: var(--space-3);
+}
+
+.dock-sheet-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-2);
+}
+
+.dock-sheet .bar-btn {
+    background-color: var(--bg-secondary);
+    border: 1.5px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    padding: var(--space-3) 4px;
+    font-size: 11px;
+}
+.dock-sheet .bar-btn:active { background-color: var(--bg-hover); }
+
+@media (max-width: 767px) {
+    .mobile-action-bar { display: block; }
 }
