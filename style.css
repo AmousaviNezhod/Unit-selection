@@ -3015,7 +3015,7 @@ body.modal-open {
 .dock-sheet {
     pointer-events: auto;
     position: fixed;
-    bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+    bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px) + 84px); /* sits right above the pill dock */
     left: var(--space-3);
     right: var(--space-3);
     background-color: rgba(20, 20, 20, 0.97);
@@ -3025,7 +3025,9 @@ body.modal-open {
     border-radius: var(--radius-lg);
     padding: var(--space-3);
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
-    transform: translateY(calc(100% + 24px)); /* hidden below the edge */
+    /* Expand from the dock pill: collapsed state hugs the pill's spot */
+    transform-origin: 50% 100%;
+    transform: scale(0.2) translateY(30px);
     opacity: 0;
     visibility: hidden;
     transition: transform var(--transition-slow) cubic-bezier(0.16, 1, 0.3, 1),
@@ -3033,12 +3035,31 @@ body.modal-open {
                 visibility 0s linear var(--transition-slow);
 }
 .mobile-action-bar.open .dock-sheet {
-    transform: translateY(0);
+    transform: scale(1) translateY(0);
     opacity: 1;
     visibility: visible;
     transition: transform var(--transition-slow) cubic-bezier(0.16, 1, 0.3, 1),
                 opacity var(--transition-base);
 }
+
+/* Grid buttons cascade in as the sheet expands */
+.dock-sheet .bar-btn {
+    opacity: 0;
+    transform: translateY(10px) scale(0.9);
+    transition: transform var(--transition-base) cubic-bezier(0.16, 1, 0.3, 1),
+                opacity var(--transition-base);
+}
+.mobile-action-bar.open .dock-sheet .bar-btn {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+.mobile-action-bar.open .dock-sheet .bar-btn:nth-child(1) { transition-delay: 60ms; }
+.mobile-action-bar.open .dock-sheet .bar-btn:nth-child(2) { transition-delay: 100ms; }
+.mobile-action-bar.open .dock-sheet .bar-btn:nth-child(3) { transition-delay: 140ms; }
+.mobile-action-bar.open .dock-sheet .bar-btn:nth-child(4) { transition-delay: 180ms; }
+.mobile-action-bar.open .dock-sheet .bar-btn:nth-child(5) { transition-delay: 220ms; }
+.mobile-action-bar.open .dock-sheet .bar-btn:nth-child(6) { transition-delay: 260ms; }
+.mobile-action-bar.open .dock-sheet .bar-btn:nth-child(7) { transition-delay: 300ms; }
 
 .dock-sheet-handle {
     width: 42px;
