@@ -17,6 +17,7 @@
     <!-- Styles -->
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="combo.css">
+    <link rel="stylesheet" href="io.css">
 </head>
 <body class="dark-mode">
 
@@ -151,6 +152,15 @@
                         <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                     </svg>
                     <span>کپی برنامه</span>
+                </button>
+
+                <button class="control-btn secondary" id="btnIo">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    <span>ورود/خروجی برنامه</span>
                 </button>
 
                 <button class="control-btn secondary" id="btnShareLink">
@@ -338,6 +348,14 @@
                     <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                 </svg>
                 <span>کپی برنامه</span>
+            </button>
+            <button type="button" class="bar-btn" id="btnIoM">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                <span>ورود/خروجی</span>
             </button>
             <button type="button" class="bar-btn" id="btnShareLinkM">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -690,6 +708,73 @@
 
             <div class="modal-footer">
                 <button class="btn-secondary" id="btnCloseComboFooter">بستن</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import/Export Modal (ورود و خروجی برنامه) -->
+    <div class="modal-overlay" id="ioModal">
+        <div class="modal-content modal-large io-modal">
+            <div class="modal-header">
+                <h3 class="modal-title">ورود و خروجی برنامه</h3>
+                <button class="modal-close" id="closeIoModal">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="modal-tabs" role="tablist">
+                <button class="modal-tab active" id="tabIoExport" role="tab" aria-selected="true" aria-controls="paneIoExport">خروجی برنامه</button>
+                <button class="modal-tab" id="tabIoImport" role="tab" aria-selected="false" aria-controls="paneIoImport">ورود برنامه</button>
+            </div>
+
+            <!-- Tab 1: export -->
+            <div class="modal-tab-pane active" id="paneIoExport" role="tabpanel">
+                <div class="modal-body io-body">
+                    <p class="io-hint">
+                        JSON برنامه فعلی‌ات را کپی کن و همراه درخواستت به هر هوش مصنوعی بده تا برنامه‌ات را بچیند؛
+                        خروجی آن را در تب «ورود برنامه» وارد کن.
+                        یا فایل <span class="code-hint">schedule.json</span> را دانلود کن و نگه دار.
+                    </p>
+                    <textarea id="ioExportBox" class="io-textarea" dir="ltr" readonly spellcheck="false"></textarea>
+                    <div class="io-actions">
+                        <button class="btn-secondary" id="btnIoCopy">کپی JSON</button>
+                        <button class="btn-secondary" id="btnIoDownload">دانلود فایل</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab 2: import -->
+            <div class="modal-tab-pane" id="paneIoImport" role="tabpanel">
+                <div class="modal-body io-body">
+                    <p class="io-hint">
+                        فایل <span class="code-hint">schedule.json</span> را انتخاب کن یا خروجی هوش مصنوعی را در کادر بچسبان.
+                        هر درس با دیتای سایت بررسی می‌شود؛ درس نامعتبر وارد نمی‌شود و تداخل‌ها را خودت حل می‌کنی.
+                    </p>
+                    <div class="io-file-row">
+                        <input type="file" id="ioFileInput" accept=".json,.txt,application/json,text/plain">
+                    </div>
+                    <textarea id="ioPasteBox" class="io-textarea" dir="ltr" spellcheck="false" placeholder='{ "format": "unit-selection-schedule", "version": 1, "courses": [ ... ] }'></textarea>
+                    <div class="io-actions">
+                        <button class="btn-primary" id="btnIoValidate">بررسی و پیش‌نمایش</button>
+                    </div>
+                    <div id="ioPreview" class="io-preview"><!-- Preview filled by JS --></div>
+                </div>
+                <div class="modal-footer" id="ioImportFooter" hidden>
+                    <div class="io-mode-row" id="ioModeRow">
+                        <label class="io-mode-option">
+                            <input type="radio" name="ioMode" id="ioModeAdd" value="add">
+                            <span>افزودن به برنامه فعلی</span>
+                        </label>
+                        <label class="io-mode-option">
+                            <input type="radio" name="ioMode" id="ioModeReplace" value="replace">
+                            <span>جایگزینی کامل برنامه</span>
+                        </label>
+                    </div>
+                    <button class="btn-primary" id="btnIoApply">اعمال برنامه</button>
+                </div>
             </div>
         </div>
     </div>

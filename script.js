@@ -215,6 +215,8 @@ const elements = {
     btnReset: document.getElementById('btnReset'),
     btnFitTable: document.getElementById('btnFitTable'),
     btnBannerRestoreDefault: document.getElementById('btnBannerRestoreDefault'),
+    btnIo: document.getElementById('btnIo'),
+    btnIoM: document.getElementById('btnIoM'),
 
     // Mobile bottom action bar (phone-only mirror of the controls above)
     btnViewListM: document.getElementById('btnViewListM'),
@@ -293,6 +295,26 @@ const elements = {
     btnOpenCustomDataFreshness: document.getElementById('btnOpenCustomDataFreshness'),
     freshnessLastUpdate: document.getElementById('freshnessLastUpdate'),
     degreeSelect: document.getElementById('degreeSelect'),
+
+    // Import/Export modal (ورود و خروجی برنامه)
+    ioModal: document.getElementById('ioModal'),
+    closeIoModal: document.getElementById('closeIoModal'),
+    tabIoExport: document.getElementById('tabIoExport'),
+    tabIoImport: document.getElementById('tabIoImport'),
+    paneIoExport: document.getElementById('paneIoExport'),
+    paneIoImport: document.getElementById('paneIoImport'),
+    ioExportBox: document.getElementById('ioExportBox'),
+    btnIoCopy: document.getElementById('btnIoCopy'),
+    btnIoDownload: document.getElementById('btnIoDownload'),
+    ioFileInput: document.getElementById('ioFileInput'),
+    ioPasteBox: document.getElementById('ioPasteBox'),
+    btnIoValidate: document.getElementById('btnIoValidate'),
+    ioPreview: document.getElementById('ioPreview'),
+    ioImportFooter: document.getElementById('ioImportFooter'),
+    ioModeRow: document.getElementById('ioModeRow'),
+    ioModeAdd: document.getElementById('ioModeAdd'),
+    ioModeReplace: document.getElementById('ioModeReplace'),
+    btnIoApply: document.getElementById('btnIoApply'),
 
     // Toast
     toastContainer: document.getElementById('toastContainer')
@@ -2548,6 +2570,567 @@ function restoreFromHash() {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// SCHEDULE IMPORT/EXPORT (ورود و خروجی برنامه)
+// Export the active tab's selection as JSON; import validates every
+// entry against the active dataset (no hallucinated courses), shows
+// conflicts for the user to resolve, then applies to the active tab.
+// ═══════════════════════════════════════════════════════════════
+
+const SCHEDULE_IO_FORMAT = 'unit-selection-schedule';
+const SCHEDULE_IO_VERSION = 1;
+
+/** Import previews build a model { resolved, rejected, conflicts, duplicates } kept here for apply */
+let ioLastModel = null;
+
+/** Convert Persian/Arabic-Indic digits in a string to Latin digits */
+function faDigitsToLatin(str) {
+    return String(str)
+        .replace(/[۰-۹]/g, d => String.fromCharCode(d.charCodeAt(0) - 0x06F0 + 0x30))
+        .replace(/[٠-٩]/g, d => String.fromCharCode(d.charCodeAt(0) - 0x0660 + 0x30));
+}
+
+/** Export slot -> file slot ({day,start,end,parity?}); parity label only when biweekly */
+function slotToExport(slot) {
+    const out = { day: slot.day, start: slot.start, end: slot.end };
+    const parity = slotParityLabel(slot);
+    if (parity) out.parity = parity;
+    return out;
+}
+
+/** JSON of the current selection in the shareable format */
+function buildExportJson() {
+    return {
+        format: SCHEDULE_IO_FORMAT,
+        version: SCHEDULE_IO_VERSION,
+        courses: state.selectedCourses
+            .map(findCourseById)
+            .filter(Boolean)
+            .map(c => ({
+                code: c.code,
+                group: c.group,
+                name: c.name,
+                units: c.units,
+                professor: c.professor,
+                schedule: c.schedule.map(slotToExport)
+            }))
+    };
+}
+
+/** Refresh the export textarea from the current selection */
+function exportIo() {
+    elements.ioExportBox.value = JSON.stringify(buildExportJson(), null, 2);
+}
+
+/** Download the export as schedule.json */
+function downloadIo() {
+    const blob = new Blob([JSON.stringify(buildExportJson(), null, 2)],
+        { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'schedule.json';
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+// ── Import: normalization + resolution against the live dataset ──
+
+/** Normalize slot fields; invalid slot -> null.
+ *  Accepts {day,start,end,parity?} objects or raw portal strings like
+ *  "جلسه اول روز: پنجشنبه ساعت 14(هفته در میان به مدت 120 دقیقه در 0) شروع فرد"
+ *  (parseSessionChunk handles the portal text format). */
+function normalizeIoSlot(raw) {
+    if (typeof raw === 'string') return parseSessionChunk(raw);
+    if (!raw || typeof raw !== 'object') return null;
+    const day = raw.day ? normalizeDay(String(raw.day)) : null;
+    const start = faDigitsToLatin(String(raw.start ?? '')).trim();
+    const end = faDigitsToLatin(String(raw.end ?? '')).trim();
+    if (!day || !start || !end) return null;
+    // Times must be HH:MM-ish; parseTime does the numeric validation
+    if (!/^\d{1,2}(:\d{1,2})?$/.test(start) || !/^\d{1,2}(:\d{1,2})?$/.test(end)) return null;
+    const parityRaw = String(raw.parity ?? '').trim();
+    const parity = parityRaw.includes('زوج') ? 'even'
+        : parityRaw.includes('فرد') ? 'odd' : null;
+    const slot = { day, start, end, cadence: parity ? 'biweekly' : 'weekly', parity: parity || null };
+    return parseTime(start) >= parseTime(end) ? null : slot;
+}
+
+/**
+ * Mirror parseTableData field-shape from an imported entry, or null when the
+ * entry's core fields (code/name) are unusable.
+ */
+function normalizeIoEntry(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const code = faDigitsToLatin(String(raw.code ?? '')).trim();
+    if (!code) return null;
+    const name = String(raw.name ?? '').trim();
+    const group = faDigitsToLatin(String(raw.group ?? '')).trim();
+    const professor = String(raw.professor ?? '').trim();
+    const units = parseFloat(faDigitsToLatin(String(raw.units ?? ''))) || 0;
+    const slots = Array.isArray(raw.schedule)
+        ? raw.schedule.map(normalizeIoSlot).filter(Boolean)
+        : [];
+    return { code, name, group, professor, units, slots };
+}
+
+/** Do entry slots and a real course's slots describe the same timetable? */
+function slotsMatchIo(entrySlots, courseSlots) {
+    if (entrySlots.length !== courseSlots.length) return false;
+    return entrySlots.every(slot => courseSlots.some(or => {
+        if (or.day !== slot.day) return false;
+        if (parseTime(or.start) !== parseTime(slot.start)) return false;
+        if (parseTime(or.end) !== parseTime(slot.end)) return false;
+        const orParity = or.cadence === 'biweekly' ? (or.parity || 'both') : 'both';
+        const inParity = slot.cadence === 'biweekly' ? (slot.parity || 'both') : 'both';
+        return orParity === inParity;
+    }));
+}
+
+/** Loose professor comparison: exact, or a full containment either way */
+function professorMatches(a, b) {
+    if (!a || !b) return true; // unknown on either side is not a mismatch
+    if (a === b) return true;
+    return a.includes(b) || b.includes(a);
+}
+
+/**
+ * Resolve one imported entry against the active dataset.
+ * Strategy: code+group exact lookup first; verify units/professor/schedule of
+ * the matched row. Mismatch on any core field rejects the entry — imported
+ * data may never differ from the pre-loaded dataset.
+ */
+function resolveIoEntry(entry) {
+    const pool = getActiveCourses();
+    const byCode = pool.filter(c => c.code === entry.code);
+
+    if (!byCode.length) {
+        return { status: 'rejected', reason: 'کد درس در دیتای فعلی پیدا نشد' };
+    }
+
+    let candidates = byCode;
+    if (entry.group) {
+        const exact = byCode.filter(c => c.group === entry.group);
+        if (!exact.length) {
+            return { status: 'rejected', reason: `گروه ${entry.group} برای این کد ارائه نشده (گروه‌های موجود: ${byCode.map(c => c.group).join('، ')})` };
+        }
+        candidates = exact;
+    }
+
+    for (const c of candidates) {
+        const unitsOk = !entry.units || Math.abs(c.units - entry.units) < 0.01;
+        const profOk = professorMatches(c.professor, entry.professor || c.professor);
+        const slotsOk = entry.slots.length === 0
+            ? c.schedule.length === 0 // both no-time → consistent
+            : slotsMatchIo(entry.slots, c.schedule);
+        if (unitsOk && profOk && slotsOk) {
+            if (!isCapacityAvailable(c)) {
+                return { status: 'rejected', reason: 'ظرفیت این درس تکمیل شده است' };
+            }
+            return { status: 'resolved', course: c };
+        }
+    }
+
+    // Diagnose the first candidate for a precise Persian reason
+    const c = candidates[0];
+    const problems = [];
+    if (entry.units && Math.abs(c.units - entry.units) >= 0.01) {
+        problems.push(`واحد (${entry.units} به‌جای ${c.units})`);
+    }
+    if (entry.professor && !professorMatches(c.professor, entry.professor)) {
+        problems.push(`استاد (${entry.professor} به‌جای ${c.professor})`);
+    }
+    if (!slotsMatchIo(entry.slots, c.schedule)) {
+        problems.push('زمان کلاس با دیتا مطابقت ندارد');
+    }
+    return { status: 'rejected', reason: 'اطلاعات درس با دیتای سایت یکی نیست: ' + problems.join('، ') };
+}
+
+/** Parse + normalize pasted text into a preview model */
+function validateIoText(text) {
+    ioLastModel = null;
+    elements.ioPreview.innerHTML = '';
+    elements.ioImportFooter.hidden = true;
+
+    if (!text.trim()) {
+        renderIoError('کادر ورودی خالی است.');
+        return;
+    }
+
+    let payload;
+    try {
+        payload = JSON.parse(text.trim());
+    } catch (e1) {
+        // LLMs often wrap JSON in ``` fences — keep only the {...} span
+        const first = text.indexOf('{');
+        const last = text.lastIndexOf('}');
+        if (first >= 0 && last > first) {
+            try { payload = JSON.parse(text.slice(first, last + 1)); } catch (e2) { payload = null; }
+        } else {
+            payload = null;
+        }
+    }
+
+    if (!payload) {
+        renderIoError('متن واردشده JSON معتبر نیست. خروجی مدل را کامل و بدون متن اضافه وارد کنید.');
+        return;
+    }
+
+    if (payload.format !== SCHEDULE_IO_FORMAT) {
+        renderIoError(`فرمت پشتیبانی نمی‌شود ("format" باید "${SCHEDULE_IO_FORMAT}" باشد).`);
+        return;
+    }
+    if (payload.version !== SCHEDULE_IO_VERSION) {
+        renderIoError(`نسخه فرمت پشتیبانی نمی‌شود (version باید ${SCHEDULE_IO_VERSION} باشد).`);
+        return;
+    }
+    if (!Array.isArray(payload.courses) || payload.courses.length === 0) {
+        renderIoError('لیست دروس خالی است ("courses" باید آرایه دروس باشد).');
+        return;
+    }
+
+    // Normalize + dedupe: same code twice in one file → keep the first
+    const entries = [];
+    const rejected = [];
+    const duplicates = [];
+    for (const raw of payload.courses) {
+        const entry = normalizeIoEntry(raw);
+        if (!entry) {
+            rejected.push({ entry: { name: '?', code: '—' }, reason: 'ساختار درس نامعتبر است (کد ندارد یا زمان‌ها خراب است)' });
+            continue;
+        }
+        if (entries.some(e => e.code === entry.code)) {
+            duplicates.push(entry.name || entry.code);
+            continue;
+        }
+        entries.push(entry);
+    }
+
+    // Resolve each entry against the dataset
+    const resolved = [];
+    for (const entry of entries) {
+        const result = resolveIoEntry(entry);
+        if (result.status === 'resolved') resolved.push(result.course);
+        else rejected.push({ entry, reason: result.reason });
+    }
+
+    // Conflict graph: import-vs-import pairs, then import-vs-current (add mode)
+    const conflicts = [];
+    for (let i = 0; i < resolved.length; i++) {
+        for (let j = i + 1; j < resolved.length; j++) {
+            const d = checkConflict(resolved[i], resolved[j]);
+            if (d.hasConflict) conflicts.push({
+                a: { source: 'import', ref: resolved[i] },
+                b: { source: 'import', ref: resolved[j] },
+                detail: d
+            });
+        }
+    }
+    resolved.forEach(course => {
+        state.selectedCourses.map(findCourseById).filter(Boolean).forEach(current => {
+            if (getCourseId(course) === getCourseId(current)) return; // same course, not a conflict
+            const d = checkConflict(course, current);
+            if (d.hasConflict) conflicts.push({
+                a: { source: 'import', ref: course },
+                b: { source: 'current', ref: current },
+                detail: d
+            });
+        });
+    });
+
+    ioLastModel = { resolved, rejected, conflicts, duplicates };
+    renderIoPreview(ioLastModel);
+    showToast(
+        resolved.length
+            ? `${toPersianNumber(resolved.length)} درس معتبر${rejected.length ? `، ${toPersianNumber(rejected.length)} درس رد شد` : ''}`
+            : 'هیچ درس معتبری پیدا نشد',
+        resolved.length ? (rejected.length ? 'warning' : 'info') : 'error'
+    );
+}
+
+/** Inline error box inside the preview area */
+function renderIoError(message) {
+    ioLastModel = null;
+    elements.ioImportFooter.hidden = true;
+    elements.ioPreview.innerHTML = `<div class="io-error">${escapeHtml(message)}</div>`;
+}
+
+/** Preview: pickable resolved courses, rejected rows, conflict radios */
+function renderIoPreview(model) {
+    const { resolved, rejected, conflicts, duplicates } = model;
+
+    // Mode radios only matter when there is an existing program to interact with
+    elements.ioModeRow.style.display = state.selectedCourses.length ? 'flex' : 'none';
+    if (!state.selectedCourses.length) elements.ioModeAdd.checked = true;
+    if (!elements.ioModeReplace.checked && !elements.ioModeAdd.checked) elements.ioModeAdd.checked = true;
+
+    let html = '';
+
+    if (duplicates && duplicates.length) {
+        html += `<p class="io-note">تکراری نادیده گرفته شد: ${duplicates.map(escapeHtml).join('، ')}</p>`;
+    }
+
+    if (resolved.length) {
+        html += `
+        <div class="io-section resolves">
+            <h4 class="io-section-title">✅ دروس قابل افزودن <span class="io-count">${toPersianNumber(resolved.length)}</span></h4>
+            ${resolved.map((c, i) => renderIoCourseRow(c, i)).join('')}
+        </div>`;
+    }
+
+    if (rejected.length) {
+        html += `
+        <div class="io-section rejects">
+            <h4 class="io-section-title">⛔ دروس رد شده <span class="io-count">${toPersianNumber(rejected.length)}</span></h4>
+            ${rejected.map(r => `
+                <div class="io-reject-row">
+                    <span class="io-reject-name">${escapeHtml(r.entry.name || 'درس بی‌نام')} ${r.entry.code ? `(کد ${toPersianNumber(r.entry.code)})` : ''}</span>
+                    <span class="io-reject-reason">${escapeHtml(r.reason)}</span>
+                </div>`).join('')}
+        </div>`;
+    }
+
+    if (conflicts.length) {
+        html += `
+        <div class="io-section conflicts">
+            <h4 class="io-section-title">⚠️ تداخل‌های زمانی <span class="io-count">${toPersianNumber(conflicts.length)}</span></h4>
+            ${conflicts.map((cf, i) => renderIoConflictPair(cf, i)).join('')}
+        </div>`;
+    }
+
+    if (!resolved.length && !rejected.length) {
+        html += '<div class="io-error">هیچ درسی در فایل پیدا نشد.</div>';
+    }
+
+    elements.ioPreview.innerHTML = html;
+
+    // Wire checkboxes/radios, then sync visibility of excluded rows
+    elements.ioPreview.querySelectorAll('.io-course-row input[type="checkbox"]').forEach(box => {
+        box.addEventListener('change', () => refreshIoPreviewState());
+    });
+    elements.ioPreview.querySelectorAll(`input[name^="io-conflict-"]`).forEach(radio => {
+        radio.addEventListener('change', () => refreshIoPreviewState());
+    });
+    refreshIoPreviewState();
+}
+
+/** One checkbox row of a resolvable import course */
+function renderIoCourseRow(course) {
+    const slots = course.schedule.length
+        ? course.schedule.map(s => {
+            const parity = slotParityLabel(s);
+            return `<span class="io-slot-tag">${escapeHtml(s.day)} ${toPersianTime(s.start)}-${toPersianTime(s.end)}${parity ? ` (${parity})` : ''}</span>`;
+        }).join('')
+        : '<span class="io-slot-tag">بدون زمان‌بندی مشخص</span>';
+    return `
+        <label class="io-course-row" data-io-code="${escapeHtml(course.code)}">
+            <input type="checkbox" checked data-io-code="${escapeHtml(course.code)}">
+            <span class="io-course-main">
+                <span class="io-course-name">${escapeHtml(course.name)}</span>
+                <span class="io-course-meta">استاد: ${escapeHtml(course.professor)} • ${formatUnits(course.units)} واحد • گروه ${toPersianNumber(course.group)} • کد ${toPersianNumber(course.code)}</span>
+                <span class="io-course-slots">${slots}</span>
+            </span>
+        </label>`;
+}
+// (unused index param dropped; callers pass only the course)
+
+/** One conflict card with two radio options */
+function renderIoConflictPair(cf, index) {
+    const srcLabel = src => src === 'import'
+        ? '<span class="io-opt-source import-src">فایل</span>'
+        : '<span class="io-opt-source current-src">برنامه فعلی</span>';
+    const opt = (side, iMin) => `
+        <label class="io-conflict-option" data-io-side="${iMin ? 'b' : 'a'}" data-io-code="${escapeHtml(cf[iMin ? 'b' : 'a'].ref.code)}">
+            <input type="radio" name="io-conflict-${index}" value="${iMin ? 'b' : 'a'}" ${iMin ? '' : 'checked'}>
+            ${srcLabel(cf[iMin ? 'b' : 'a'].source)}
+            <span>${escapeHtml(cf[iMin ? 'b' : 'a'].ref.name)} (گروه ${toPersianNumber(cf[iMin ? 'b' : 'a'].ref.group)})</span>
+        </label>`;
+    return `
+        <div class="io-conflict-pair" data-io-pair="${index}">
+            <p class="io-conflict-reason">روز ${escapeHtml(cf.detail.day)} — ساعت ${toPersianTime(cf.detail.time1)} با ${toPersianTime(cf.detail.time2)}</p>
+            <div class="io-conflict-options">
+                ${opt(cf.a, 0)}
+                ${opt(cf.b, 1)}
+            </div>
+        </div>`;
+}
+
+/**
+ * Recompute which resolved rows stay visible after each checkbox/radio change:
+ * a conflict loser gets its row dimmed (kept visible so the user can switch).
+ */
+function refreshIoPreviewState() {
+    if (!ioLastModel) return;
+    const { conflicts } = ioLastModel;
+
+    // Losers per conflict: side not chosen by its radio
+    const losers = new Set(); // by resolved-course code; or code string of current course
+    conflicts.forEach((cf, index) => {
+        const radios = document.querySelectorAll(`input[name="io-conflict-${index}"]`);
+        const chosen = Array.from(radios).find(r => r.checked);
+        if (!chosen) return;
+        const loserSide = chosen.value === 'a' ? 'b' : 'a';
+        const loser = cf[loserSide];
+        losers.add((loser.source === 'import' ? 'i:' : 'c:') + loser.ref.code);
+    });
+
+    // Dim excluded import rows: lost a conflict radio, or user unchecked
+    elements.ioPreview.querySelectorAll('.io-course-row').forEach(row => {
+        const code = row.dataset.ioCode;
+        const box = row.querySelector('input[type="checkbox"]');
+        const lostConflict = losers.has('i:' + code);
+        row.classList.toggle('excluded', lostConflict || !box.checked);
+    });
+
+    updateIoApplyState();
+}
+
+/** Enable/disable the apply footer from the current preview state */
+function updateIoApplyState() {
+    const checked = elements.ioPreview.querySelectorAll('.io-course-row input[type="checkbox"]:checked');
+    elements.ioImportFooter.hidden =
+        !ioLastModel ||
+        (!ioLastModel.resolved.length && !ioLastModel.rejected.length);
+    const mode = elements.ioModeReplace.checked ? 'replace' : 'add';
+    const anyPicks = mode === 'replace'
+        ? checked.length > 0
+        : checked.length > 0 || state.selectedCourses.length > 0;
+    elements.btnIoApply.disabled = !anyPicks;
+}
+
+/** Compute the final course list from the preview and apply it to the ACTIVE tab */
+function applyIoImport() {
+    if (!ioLastModel) return;
+    const { resolved, conflicts } = ioLastModel;
+    const mode = elements.ioModeReplace.checked ? 'replace' : 'add';
+
+    // Courses excluded by losing a conflict radio
+    const lost = new Set();
+    conflicts.forEach((cf, index) => {
+        const chosen = document.querySelector(`input[name="io-conflict-${index}"]:checked`);
+        if (!chosen) return;
+        const loserSide = chosen.value === 'a' ? 'b' : 'a';
+        const loser = cf[loserSide];
+        lost.add(loser.ref.code);
+    });
+
+    // Checked resolved rows minus conflict losers
+    const checked = new Map(
+        Array.from(elements.ioPreview.querySelectorAll('.io-course-row input[type="checkbox"]:checked'))
+            .map(box => [box.dataset.ioCode, true])
+    );
+    const finalIds = resolved
+        .filter(c => checked.has(c.code) && !lost.has(c.code))
+        .map(getCourseId);
+
+    // Build the target list: replace = imports only; add = current + imports.
+    // Same course code must never appear twice (addCourse rule: a course is
+    // taken once regardless of group) — the NEW import wins over an old group.
+    const base = mode === 'replace' ? [] : state.selectedCourses.slice();
+    const target = base.map(id => findCourseById(id)).filter(Boolean);
+    finalIds.forEach(id => {
+        const course = findCourseById(id);
+        if (!course) return;
+        // drop any existing entry of the same code (including the exact same id)
+        for (let i = target.length - 1; i >= 0; i--) {
+            if (target[i].code === course.code) target.splice(i, 1);
+        }
+        target.push(course);
+    });
+
+    state.selectedCourses = target.map(getCourseId);
+
+    saveSchedules(); // keeps the active tab + mirror key in sync
+    state.unitsWarned = false;
+    updateSummary();
+    refreshLists();
+    renderSchedule();
+    renderScheduleTabs(); // tab count badges may change
+    closeAllModals();
+    ioLastModel = null;
+
+    showToast(
+        mode === 'replace'
+            ? `برنامه جایگزین شد (${toPersianNumber(finalIds.length)} درس)`
+            : `${toPersianNumber(finalIds.length)} درس به برنامه اضافه شد`,
+        'success'
+    );
+
+    const total = getTotalUnits();
+    if (total > CONFIG.MAX_UNITS) {
+        showToast(`هشدار: جمع واحدها (${formatUnits(total)}) از ${toPersianNumber(CONFIG.MAX_UNITS)} واحد مجاز بیشتر شد!`, 'warning');
+    }
+}
+
+// ── Modal open/close + tab switching ───────────────────────────
+
+function exportIoOpen() {
+    exportIo();
+    setIoTab('export');
+    elements.ioModal.classList.add('active');
+}
+
+function setIoTab(tab) {
+    const isExport = tab === 'export';
+    elements.tabIoExport.classList.toggle('active', isExport);
+    elements.tabIoExport.setAttribute('aria-selected', String(isExport));
+    elements.tabIoImport.classList.toggle('active', !isExport);
+    elements.tabIoImport.setAttribute('aria-selected', String(!isExport));
+    elements.paneIoExport.classList.toggle('active', isExport);
+    elements.paneIoImport.classList.toggle('active', !isExport);
+}
+
+function setupIoFeature() {
+    const open = () => exportIoOpen();
+    if (elements.btnIo) elements.btnIo.addEventListener('click', open);
+    if (elements.btnIoM) elements.btnIoM.addEventListener('click', open);
+
+    elements.closeIoModal.addEventListener('click', closeAllModals);
+
+    elements.tabIoExport.addEventListener('click', () => setIoTab('export'));
+    elements.tabIoImport.addEventListener('click', () => setIoTab('import'));
+
+    elements.btnIoCopy.addEventListener('click', async () => {
+        try {
+            exportIo();
+            await navigator.clipboard.writeText(elements.ioExportBox.value);
+            showToast('JSON برنامه کپی شد', 'success');
+        } catch (e) {
+            showToast('خطا در کپی کردن', 'error');
+        }
+    });
+
+    elements.btnIoDownload.addEventListener('click', () => {
+        if (!state.selectedCourses.length) {
+            showToast('برنامه خالی است', 'warning');
+            return;
+        }
+        downloadIo();
+        showToast('فایل schedule.json دانلود شد', 'success');
+    });
+
+    elements.btnIoValidate.addEventListener('click', () => validateIoText(elements.ioPasteBox.value));
+
+    elements.ioFileInput.addEventListener('change', () => {
+        const file = elements.ioFileInput.files && elements.ioFileInput.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            elements.ioPasteBox.value = String(reader.result || '');
+            validateIoText(elements.ioPasteBox.value);
+        };
+        reader.onerror = () => showToast('خطا در خواندن فایل', 'error');
+        reader.readAsText(file, 'utf-8');
+        elements.ioFileInput.value = ''; // allow re-picking the same file
+    });
+
+    elements.ioModeAdd.addEventListener('change', updateIoApplyState);
+    elements.ioModeReplace.addEventListener('change', updateIoApplyState);
+    elements.btnIoApply.addEventListener('click', applyIoImport);
+
+    // Overlay/X close handled globally (closeAllModals + .modal-overlay click)
+}
+
+// ═══════════════════════════════════════════════════════════════
 // TOAST NOTIFICATIONS
 // ═══════════════════════════════════════════════════════════════
 
@@ -2846,6 +3429,9 @@ function setupEventListeners() {
     if (typeof setupComboGenerator === 'function') {
         setupComboGenerator();
     }
+
+    // Import/Export (ورود و خروجی برنامه)
+    setupIoFeature();
 }
 
 // ═══════════════════════════════════════════════════════════════
