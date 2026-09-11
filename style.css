@@ -807,6 +807,141 @@ body.modal-open {
     color: var(--danger);
 }
 
+/* Group swap: replaces the selected group with this card's group */
+.btn-swap-group {
+    width: 100%;
+    margin-top: var(--space-2);
+    padding: var(--space-2) var(--space-4);
+    font-family: var(--font-family);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-semibold);
+    color: var(--info);
+    background-color: transparent;
+    border: 2px dashed var(--info);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+.btn-swap-group:hover {
+    background-color: var(--info);
+    color: #fff;
+    border-style: solid;
+}
+
+/* Info modal: other groups (variants) of the same course */
+.course-variants-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+.course-variant-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3);
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-sm);
+}
+.course-variant-row.full { opacity: 0.55; }
+.course-variant-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+}
+.course-variant-title {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-semibold);
+    color: var(--text-primary);
+}
+.course-variant-schedule {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+}
+.course-variant-full {
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-semibold);
+    color: var(--danger);
+    flex-shrink: 0;
+}
+.course-variant-row .btn-swap-group {
+    width: auto;
+    margin-top: 0;
+    flex-shrink: 0;
+    padding: var(--space-1) var(--space-3);
+    font-size: var(--font-size-xs);
+}
+
+/* ── Share-link landing: destination picker + export row ─────── */
+.share-destination-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin: var(--space-3) 0;
+}
+.share-destination-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3);
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: border-color var(--transition-fast), background-color var(--transition-fast);
+}
+.share-destination-row:hover {
+    border-color: var(--border-focus);
+    background-color: var(--bg-hover);
+}
+.share-destination-row.warn {
+    border-color: var(--warning);
+}
+.share-destination-row input { flex-shrink: 0; }
+.share-dest-title {
+    flex: 1;
+    min-width: 0;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-semibold);
+    color: var(--text-primary);
+}
+.share-dest-replace {
+    color: var(--warning);
+    font-weight: var(--font-medium);
+    font-size: var(--font-size-xs);
+}
+.share-dest-meta {
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+.share-export-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+}
+.share-export-btn {
+    flex: 1 1 auto;
+    padding: var(--space-2) var(--space-3);
+    font-family: var(--font-family);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-semibold);
+    color: var(--text-primary);
+    background-color: var(--bg-secondary);
+    border: 1.5px solid var(--border-primary);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+.share-export-btn:hover {
+    border-color: var(--text-primary);
+    background-color: var(--bg-hover);
+}
+
 /* ─────────────────────────────────────────────────────────────
    SUMMARY + CONTROLS
    ───────────────────────────────────────────────────────────── */

@@ -294,6 +294,18 @@ const elements = {
     closeConflictModal: document.getElementById('closeConflictModal'),
     btnCloseConflictModal: document.getElementById('btnCloseConflictModal'),
 
+    // Share-link landing modal
+    shareLandingModal: document.getElementById('shareLandingModal'),
+    shareLandingMessage: document.getElementById('shareLandingMessage'),
+    shareDestinationList: document.getElementById('shareDestinationList'),
+    closeShareLanding: document.getElementById('closeShareLanding'),
+    btnApplyShareLanding: document.getElementById('btnApplyShareLanding'),
+    btnDismissShareLanding: document.getElementById('btnDismissShareLanding'),
+    landingShareLink: document.getElementById('landingShareLink'),
+    landingExportPDF: document.getElementById('landingExportPDF'),
+    landingCopyText: document.getElementById('landingCopyText'),
+    landingExportJson: document.getElementById('landingExportJson'),
+
     // Data-freshness notice (page-load modal)
     freshnessModal: document.getElementById('freshnessModal'),
     closeFreshnessModal: document.getElementById('closeFreshnessModal'),
@@ -1400,6 +1412,14 @@ function courseCardHtml(course) {
         ? '<span class="course-badge full-badge">ظرفیت پر</span>'
         : '';
 
+    // Another group of THIS course is on the schedule → offer a swap
+    const selectedVariantId = getSelectedVariantId(course.code);
+    const showSwap = !isSelected && selectedVariantId && selectedVariantId !== courseId && isCapacityAvailable(course);
+
+    const swapBtn = showSwap
+        ? `<button class="btn-swap-group" data-swap-from="${selectedVariantId}" data-swap-to="${courseId}">⇄ سواپ با گروه ${toPersianNumber(course.group)}</button>`
+        : '';
+
     const btn = isSelected
         ? `<button class="btn-add-course selected" data-course-id="${courseId}">✓ اضافه شده - حذف</button>`
         : (selectable
@@ -1422,6 +1442,7 @@ function courseCardHtml(course) {
             </div>
             <div class="course-result-schedule">${scheduleTagsHtml(course)}</div>
             ${btn}
+            ${swapBtn}
         </div>
     `;
 }
@@ -1436,6 +1457,13 @@ function bindCardButtons(container) {
             } else {
                 addCourse(courseId);
             }
+        });
+    });
+    // Swap buttons: replace the selected group with this card's group
+    container.querySelectorAll('.btn-swap-group[data-swap-to]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            swapCourseGroup(btn.dataset.swapFrom, btn.dataset.swapTo);
         });
     });
 }
@@ -1528,6 +1556,54 @@ function refreshLists() {
 
 function getTotalUnits() {
     return state.selectedCourses.reduce((sum, id) => sum + (findCourseById(id)?.units || 0), 0);
+}
+
+/** ID of the currently selected group (variant) of `code`, or null */
+function getSelectedVariantId(code) {
+    const variant = state.selectedCourses
+        .map(findCourseById)
+        .find(c => c && c.code === code);
+    return variant ? getCourseId(variant) : null;
+}
+
+/** Replace a selected group with another group of the same course.
+ *  Conflict-checked against the REST of the schedule (the outgoing group
+ *  is excluded). Returns true when the swap was applied. */
+function swapCourseGroup(fromId, toId) {
+    const fromCourse = findCourseById(fromId);
+    const toCourse = findCourseById(toId);
+    if (!fromCourse || !toCourse) return false;
+    if (toCourse.code !== fromCourse.code) return false;
+    const idx = state.selectedCourses.indexOf(fromId);
+    if (idx === -1) {
+        showToast('این گروه در برنامه نیست', 'warning');
+        return false;
+    }
+    if (!isCapacityAvailable(toCourse)) {
+        showToast(`ظرفیت گروه ${toPersianNumber(toCourse.group)} درس "${toCourse.name}" پر شده است`, 'error');
+        return false;
+    }
+
+    // Conflict pass over every selected course EXCEPT the outgoing one
+    const rest = state.selectedCourses
+        .filter(id => id !== fromId)
+        .map(findCourseById)
+        .filter(Boolean);
+    for (const other of rest) {
+        const conflict = checkConflict(toCourse, other);
+        if (conflict.hasConflict) {
+            showConflictModal(toCourse, other, conflict);
+            return false;
+        }
+    }
+
+    state.selectedCourses[idx] = toId;
+    saveSchedules();
+    updateSummary();
+    refreshLists();
+    renderSchedule();
+    showToast(`"${toCourse.name}" به گروه ${toPersianNumber(toCourse.group)} سواپ شد`, 'success');
+    return true;
 }
 
 function addCourse(courseId) {
@@ -2054,6 +2130,29 @@ function showCourseModal(course) {
         }).join('')
         : '<div class="schedule-item"><span class="schedule-item-day">بدون زمان‌بندی مشخص</span></div>';
 
+    // Other groups (variants) of the same course — swap targets
+    const isCourseSelected = state.selectedCourses.includes(getCourseId(course));
+    const variants = getListCourses().filter(c => c.code === course.code);
+    const variantsHtml = (isCourseSelected && variants.length > 1) ? `
+        <div class="course-info-item course-variants-item">
+            <span class="course-info-label">گروه‌های دیگر این درس</span>
+            <div class="course-variants-list">
+                ${variants.filter(v => getCourseId(v) !== getCourseId(course)).map(v => {
+                    const vFull = !isCapacityAvailable(v);
+                    return `
+                    <div class="course-variant-row ${vFull ? 'full' : ''}">
+                        <div class="course-variant-main">
+                            <span class="course-variant-title">گروه ${toPersianNumber(v.group)} — ${escapeHtml(v.professor)}</span>
+                            <span class="course-variant-schedule">${scheduleTagsHtml(v)}</span>
+                        </div>
+                        ${vFull
+                            ? '<span class="course-variant-full">ظرفیت پر</span>'
+                            : `<button class="btn-swap-group" data-swap-from="${getCourseId(course)}" data-swap-to="${getCourseId(v)}">⇄ سواپ</button>`}
+                    </div>`;
+                }).join('')}
+            </div>
+        </div>` : '';
+
     elements.courseModalBody.innerHTML = `
         <div class="course-info-grid">
             <div class="course-info-item">
@@ -2084,7 +2183,16 @@ function showCourseModal(course) {
                 <span class="course-info-label">برنامه هفتگی</span>
                 <div class="course-schedule-list">${scheduleHtml}</div>
             </div>
+            ${variantsHtml}
         </div>`;
+
+    // Swap buttons inside the info modal
+    elements.courseModalBody.querySelectorAll('.btn-swap-group[data-swap-to]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const applied = swapCourseGroup(btn.dataset.swapFrom, btn.dataset.swapTo);
+            if (applied) closeAllModals();
+        });
+    });
 
     // Hide remove button if course is not selected
     elements.btnRemoveCourse.style.display =
@@ -2571,6 +2679,9 @@ async function shareSchedule() {
     }
 }
 
+/** Parsed ids from a share link kept for the landing modal */
+let pendingShareIds = null;
+
 /** Restore selections from a share link's #hash (returns true when applied) */
 function restoreFromHash() {
     if (!location.hash || location.hash.length < 2) return false;
@@ -2580,14 +2691,117 @@ function restoreFromHash() {
         const valid = ids.filter(id => findCourseById(id));
         if (!valid.length) return false;
 
-        state.selectedCourses = valid;
-        saveSchedules();
+        pendingShareIds = valid;
         // Strip the hash so a refresh doesn't re-import the shared list
         history.replaceState(null, '', location.pathname + location.search);
         return true;
     } catch (error) {
         console.error('Invalid share link:', error);
         return false;
+    }
+}
+
+// ── Share-link landing: pick the destination tab ─────────────────
+
+/** Open the landing modal listing every tab + a "new tab" option */
+function openShareLanding() {
+    const sharedCount = pendingShareIds.length;
+    const canCreateNew = state.schedules.length < CONFIG.MAX_SCHEDULES;
+
+    elements.shareLandingMessage.innerHTML =
+        `این لینک شامل <strong>${toPersianNumber(sharedCount)} درس</strong> است. بریز داخل کدام برنامه؟`;
+
+    const rows = [];
+    if (canCreateNew) {
+        rows.push(`
+            <label class="share-destination-row">
+                <input type="radio" name="share-destination" value="__new__" checked>
+                <span class="share-dest-title">✚ برنامه جدید</span>
+                <span class="share-dest-meta">${toPersianNumber(state.schedules.length)} از ${toPersianNumber(CONFIG.MAX_SCHEDULES)} تب استفاده شده</span>
+            </label>`);
+    }
+    state.schedules.forEach(tab => {
+        const full = tab.courses.length > 0;
+        rows.push(`
+            <label class="share-destination-row ${!canCreateNew && full ? 'warn' : ''}">
+                <input type="radio" name="share-destination" value="${escapeHtml(tab.id)}"
+                    ${(!canCreateNew && tab === state.schedules[0]) ? 'checked' : ''}>
+                <span class="share-dest-title">${escapeHtml(tab.name)}${full ? ' <b class="share-dest-replace">(جایگزین می‌شود)</b>' : ''}</span>
+                <span class="share-dest-meta">${toPersianNumber(tab.courses.length)} درس</span>
+            </label>`);
+    });
+
+    elements.shareDestinationList.innerHTML = rows.join('');
+    elements.shareLandingModal.classList.add('active');
+}
+
+/** Apply the shared schedule to the chosen destination tab */
+function applyShareLanding() {
+    const picked = elements.shareDestinationList.querySelector('input[name="share-destination"]:checked');
+    if (!picked || !pendingShareIds) return false;
+    const value = picked.value;
+
+    if (value === '__new__') {
+        // createSchedule caps at MAX_SCHEDULES — we only offer __new__ when free
+        let id = 'tab' + Date.now();
+        while (state.schedules.some(t => t.id === id)) id = 'tab' + Date.now() + Math.floor(Math.random() * 100);
+        const tab = { id, name: `برنامه ${toPersianNumber(state.schedules.length + 1)}`, courses: [...pendingShareIds] };
+        state.schedules.push(tab);
+        syncSchedulesFromState();
+        state.activeScheduleId = id;
+        state.selectedCourses = [...pendingShareIds];
+        showToast(`"${tab.name}" ساخته شد و برنامه اشتراکی داخل آن ریخته شد`, 'success');
+    } else {
+        const tab = state.schedules.find(t => t.id === value);
+        if (!tab) return false;
+        const replaced = tab.courses.length;
+        syncSchedulesFromState();
+        state.activeScheduleId = tab.id;
+        state.selectedCourses = [...pendingShareIds];
+        showToast(
+            replaced
+                ? `برنامه "${tab.name}" با ${toPersianNumber(pendingShareIds.length)} درس اشتراکی جایگزین شد`
+                : `${toPersianNumber(pendingShareIds.length)} درس داخل "${tab.name}" ریخته شد`,
+            'success'
+        );
+    }
+
+    pendingShareIds = null;
+    state.unitsWarned = false;
+    saveSchedules();
+    updateSummary();
+    refreshLists();
+    renderSchedule();
+    renderScheduleTabs();
+    return true;
+}
+
+/** Run one of the standard exports against the SHARED list (before it is
+ *  poured into a tab): temporarily swap the selection, export, restore. */
+async function exportPendingShare(kind) {
+    if (!pendingShareIds) return;
+    const savedIds = [...state.selectedCourses];
+    state.selectedCourses = [...pendingShareIds];
+    try {
+        if (kind === 'share') {
+            await shareSchedule(); // builds the link from the shared ids
+        } else if (kind === 'pdf') {
+            exportPDF();
+        } else if (kind === 'copy') {
+            await copyToClipboard();
+        } else if (kind === 'json') {
+            const blob = new Blob([JSON.stringify(buildExportJson(), null, 2)],
+                { type: 'application/json;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'schedule.json';
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('فایل JSON دانلود شد', 'success');
+        }
+    } finally {
+        state.selectedCourses = savedIds;
     }
 }
 
@@ -3715,6 +3929,33 @@ function setupEventListeners() {
     elements.btnCloseConflictModal.addEventListener('click', closeAllModals);
     elements.closeCustomDataModal.addEventListener('click', closeAllModals);
 
+    // Share-link landing
+    elements.closeShareLanding.addEventListener('click', () => {
+        pendingShareIds = null;
+        closeAllModals();
+    });
+    elements.btnDismissShareLanding.addEventListener('click', () => {
+        pendingShareIds = null;
+        closeAllModals();
+        showToast('برنامه اشتراکی نادیده گرفته شد', 'info');
+    });
+    elements.shareLandingModal.addEventListener('click', (e) => {
+        if (e.target === elements.shareLandingModal) return; // don't discard a shared plan by overlay tap
+    });
+    elements.btnApplyShareLanding.addEventListener('click', () => {
+        if (applyShareLanding()) closeAllModals();
+    });
+    // Double-click a destination row applies it immediately
+    elements.shareDestinationList.addEventListener('dblclick', () => {
+        if (applyShareLanding()) closeAllModals();
+    });
+    // Export buttons on the landing spot: outputs FROM THE SHARED LIST,
+    // so they must temporarily swap the selection
+    elements.landingShareLink.addEventListener('click', () => exportPendingShare('share'));
+    elements.landingExportPDF.addEventListener('click', () => exportPendingShare('pdf'));
+    elements.landingCopyText.addEventListener('click', () => exportPendingShare('copy'));
+    elements.landingExportJson.addEventListener('click', () => exportPendingShare('json'));
+
     // Cost modal
     elements.closeCostModal.addEventListener('click', closeAllModals);
     elements.btnCloseCostModal.addEventListener('click', closeAllModals);
@@ -3839,7 +4080,8 @@ async function init() {
     // Restore schedule tabs first (seeds tab 1 from the legacy key on first run),
     // then import a share link into the active tab or load its saved selection
     loadSchedules();
-    if (!restoreFromHash()) {
+    const hasShareLink = restoreFromHash();
+    if (!hasShareLink) {
         loadFromStorage(); // no share link → load saved selections
     }
     syncSchedulesFromState();
@@ -3854,6 +4096,12 @@ async function init() {
     rebuildFilterBars();
 
     setupEventListeners();
+
+    // Share link detected: let the user choose the destination tab instead
+    // of silently overwriting the active one
+    if (hasShareLink && pendingShareIds) {
+        openShareLanding();
+    }
 
     console.log('Initialization complete!');
 }

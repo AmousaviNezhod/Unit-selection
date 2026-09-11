@@ -693,6 +693,38 @@
         </div>
     </div>
 
+    <!-- Share-Link Landing ( poured into a tab the user picks ) -->
+    <div class="modal-overlay" id="shareLandingModal">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h3 class="modal-title">برنامه اشتراکی</h3>
+                <button class="modal-close" id="closeShareLanding">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p class="conflict-message" id="shareLandingMessage"></p>
+                <div class="share-destination-list" id="shareDestinationList"></div>
+                <div class="freshness-hint">
+                    اگر همه برنامه‌ها پر باشند، می‌توانید یکی را برای جایگزینی انتخاب کنید — یا همین‌جا خروجی بگیرید.
+                </div>
+                <div class="share-export-row">
+                    <button class="share-export-btn" id="landingShareLink">🔗 لینک</button>
+                    <button class="share-export-btn" id="landingExportPDF">🖨 PDF</button>
+                    <button class="share-export-btn" id="landingCopyText">📋 کپی متن</button>
+                    <button class="share-export-btn" id="landingExportJson">{ } JSON</button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-primary" id="btnApplyShareLanding">ریختن در برنامه</button>
+                <button class="btn-secondary" id="btnDismissShareLanding">نادیده بگیر</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Combo Generator Modal -->
     <div class="modal-overlay" id="comboModal">
         <div class="modal-content modal-large combo-modal">
