@@ -205,6 +205,22 @@
                     </svg>
                     <span>ریست</span>
                 </button>
+
+                <button class="control-btn secondary" id="btnUndo" disabled title="برگشت آخرین تغییر">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 7v6h6"></path>
+                        <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path>
+                    </svg>
+                    <span>برگشت</span>
+                </button>
+
+                <button class="control-btn secondary" id="btnRedo" disabled title="انجام مجدد">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 7v6h-6"></path>
+                        <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13"></path>
+                    </svg>
+                    <span>انجام مجدد</span>
+                </button>
             </div>
         </section>
 
@@ -393,6 +409,18 @@
 
             <!-- Pill dock: quick actions inline + FAB as its rounded end (RTL → far left) -->
             <div class="dock-pill">
+                <button type="button" class="bar-btn dock-pill-btn" id="btnUndoM" aria-label="برگشت" title="برگشت" disabled>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 7v6h6"></path>
+                        <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path>
+                    </svg>
+                </button>
+                <button type="button" class="bar-btn dock-pill-btn" id="btnRedoM" aria-label="انجام مجدد" title="انجام مجدد" disabled>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 7v6h-6"></path>
+                        <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13"></path>
+                    </svg>
+                </button>
                 <button type="button" class="bar-btn dock-pill-btn" id="btnShareLinkM" aria-label="اشتراک لینک" title="اشتراک لینک">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="18" cy="5" r="3"></circle>

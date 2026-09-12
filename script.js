@@ -71,6 +71,7 @@ const state = {
     selectedCourses: [],    // Selected course IDs (code-group) of the ACTIVE schedule
     schedules: [],          // [{ id, name, courses: [] }] — one entry per tab
     activeScheduleId: '',   // Currently shown schedule tab
+    history: {},            // Per-tab undo/redo stacks: { tabId: { stack: [ids[]], pointer } }
     prices: {},             // Course code -> unit price (from data/couresPrice.html)
     currentModalCourse: null,
     currentHours: CONFIG.HOURS, // Hours currently rendered on grid
@@ -218,6 +219,10 @@ const elements = {
     btnBannerRestoreDefault: document.getElementById('btnBannerRestoreDefault'),
     btnIo: document.getElementById('btnIo'),
     btnIoM: document.getElementById('btnIoM'),
+    btnUndo: document.getElementById('btnUndo'),
+    btnRedo: document.getElementById('btnRedo'),
+    btnUndoM: document.getElementById('btnUndoM'),
+    btnRedoM: document.getElementById('btnRedoM'),
 
     // Mobile bottom action bar (phone-only mirror of the controls above)
     mobileActionBar: document.getElementById('mobileActionBar'),
@@ -1115,6 +1120,146 @@ function saveSchedules() {
     }
 }
 
+// ── Undo / Redo (per tab) ──────────────────────────────────────
+
+const UNDO_LIMIT = 50;
+
+/** One history entry per change: [ids before, ids after, trail slots of removed groups] */
+function pushHistory(prevIds, trailBlocks = null) {
+    const tabId = state.activeScheduleId;
+    if (!tabId) return;
+    let h = state.history[tabId];
+    if (!h) h = state.history[tabId] = { stack: [], pointer: -1 };
+    // New change always branches: drop any redo tail
+    h.stack = h.stack.slice(0, h.pointer + 1);
+    h.stack.push({
+        before: [...prevIds],
+        after: [...state.selectedCourses],
+        trail: trailBlocks // [{day, hour, color}] — where removed/old groups sat
+    });
+    if (h.stack.length > UNDO_LIMIT) h.stack.shift();
+    h.pointer = h.stack.length - 1;
+    updateUndoRedoButtons();
+}
+
+/** Return true when the change is NOT a duplicate of the top history entry */
+function historyWouldRecord(prevIds) {
+    const h = state.history[state.activeScheduleId];
+    return !h || !h.stack.length || h.pointer < 0 ||
+        JSON.stringify(h.stack[h.pointer].after) !== JSON.stringify(prevIds);
+}
+
+/** Undo/redo a schedule change (course list swap + animation replay).
+ *  Pointer = index of the last APPLIED entry; state == stack[pointer].after. */
+function undoRedo(direction) {
+    const h = state.history[state.activeScheduleId];
+    if (!h) return false;
+    if (direction < 0) {
+        // Undo: roll back the last applied entry to its "before" state
+        if (h.pointer < 0) return false;
+        const entry = h.stack[h.pointer];
+        applyHistoryState(entry.before, -1, entry.trail || []);
+        h.pointer -= 1;
+    } else {
+        // Redo: apply the next entry's "after" state
+        if (h.pointer >= h.stack.length - 1) return false;
+        const entry = h.stack[h.pointer + 1];
+        applyHistoryState(entry.after, 1);
+        h.pointer += 1;
+    }
+    updateUndoRedoButtons();
+    return true;
+}
+
+/** Set the selection to `ids` + standard refresh cascade + move animation */
+function applyHistoryState(ids, direction, trail) {
+    const prev = [...state.selectedCourses];
+    const added = ids.filter(id => !prev.includes(id));
+    const removed = prev.filter(id => !ids.includes(id));
+
+    state.selectedCourses = [...ids];
+    state.unitsWarned = false;
+    saveSchedules();
+    updateSummary();
+    refreshLists();
+    renderSchedule();
+    renderScheduleTabs();
+
+    if (added.length) {
+        // Undoing a removal (or redoing an add): shine the returned courses,
+        // trail on the cells they came from
+        const ghost = removed.length ? slotsOfCourses(removed) : (trail || []);
+        shineCourses(added, ghost);
+    } else if (removed.length) {
+        ghostTrail(slotsOfCourses(removed), []);
+    }
+    showToast(direction < 0 ? 'برگشت به عقب' : 'انجام مجدد', 'info');
+}
+
+function undoSchedule() { undoRedo(-1); }
+function redoSchedule() { undoRedo(1); }
+
+function updateUndoRedoButtons() {
+    const h = state.history[state.activeScheduleId];
+    const canUndo = !!h && h.pointer >= 0;
+    const canRedo = !!h && h.pointer < h.stack.length - 1;
+    [elements.btnUndo, elements.btnUndoM].forEach(b => { if (b) b.disabled = !canUndo; });
+    [elements.btnRedo, elements.btnRedoM].forEach(b => { if (b) b.disabled = !canRedo; });
+}
+
+/** Slots of the removed group → ghost trail blocks (chess-like "came from") */
+function slotsOfCourses(ids) {
+    const slots = [];
+    ids.forEach(id => {
+        const c = findCourseById(id);
+        if (!c) return;
+        c.schedule.forEach(s => {
+            const start = Math.floor(parseTime(s.start));
+            const end = parseTime(s.end);
+            for (let h = start; h < end && h < 24; h++) slots.push({ day: s.day, hour: h, color: c.color });
+        });
+    });
+    return slots;
+}
+
+/** Faint trail highlight on the OLD cells (chess move origin) */
+function ghostTrail(oldSlots, newSlots) {
+    document.querySelectorAll('.schedule-body .ghost-trail').forEach(el => el.remove());
+    oldSlots.forEach(s => {
+        const cell = elements.scheduleBody.querySelector(
+            `tr[data-day="${s.day}"] td[data-hour="${s.hour}"]`);
+        if (!cell || cell.querySelector('.course-block')) return;
+        const ghost = document.createElement('div');
+        ghost.className = 'ghost-trail';
+        ghost.style.setProperty('--trail-color', s.color || 'var(--accent)');
+        cell.appendChild(ghost);
+    });
+    scheduleTrailCleanup();
+}
+
+/** Shine sweep on newly-added blocks + ghost trail where the old group was */
+function shineCourses(ids, oldSlots) {
+    ids.forEach(id => {
+        elements.scheduleBody.querySelectorAll(`.course-block[data-course-id="${id}"]`)
+            .forEach(el => {
+                el.classList.remove('shine');
+                void el.offsetWidth; // restart animation
+                el.classList.add('shine');
+            });
+    });
+    ghostTrail(oldSlots || [], []);
+    // keep trail visible for ~2s
+}
+
+function scheduleTrailCleanup() {
+    setTimeout(() => {
+        document.querySelectorAll('.schedule-body .ghost-trail').forEach(el => {
+            el.classList.add('fade-out');
+            setTimeout(() => el.remove(), 400);
+        });
+    }, 2000);
+}
+
 function getActiveSchedule() {
     return state.schedules.find(t => t.id === state.activeScheduleId) || null;
 }
@@ -1140,6 +1285,23 @@ function createSchedule() {
     showToast(`"${name}" ساخته شد`, 'success');
 }
 
+/** Duplicate a tab into a new one (courses copied); the copy becomes active */
+function duplicateSchedule(id) {
+    if (state.schedules.length >= CONFIG.MAX_SCHEDULES) {
+        showToast(`حداکثر ${toPersianNumber(CONFIG.MAX_SCHEDULES)} برنامه می‌توان داشته باشید`, 'warning');
+        return;
+    }
+    const tab = state.schedules.find(t => t.id === id);
+    if (!tab) return;
+    let newId = 'tab' + Date.now();
+    while (state.schedules.some(t => t.id === newId)) newId = 'tab' + Date.now() + Math.floor(Math.random() * 100);
+    const copy = { id: newId, name: `${tab.name} (کپی)`.slice(0, 40), courses: [...tab.courses] };
+    state.schedules.push(copy);
+    switchSchedule(newId);
+    renderScheduleTabs();
+    showToast(`"${tab.name}" کپی شد → "${copy.name}" (${toPersianNumber(copy.courses.length)} درس)`, 'success');
+}
+
 /** Switch the active tab: stash current selection, load the target's */
 function switchSchedule(id) {
     if (id === state.activeScheduleId) return;
@@ -1158,6 +1320,7 @@ function switchSchedule(id) {
     refreshLists();
     renderSchedule();
     renderScheduleTabs();
+    updateUndoRedoButtons();
 }
 
 /** Delete a tab; never the last one; switch to the first remaining when needed */
@@ -1172,6 +1335,7 @@ function deleteSchedule(id) {
     if (!confirm(`برنامه "${tab.name}" با ${toPersianNumber(count)} درس حذف شود؟`)) return;
 
     state.schedules = state.schedules.filter(t => t.id !== id);
+    delete state.history[id]; // per-tab history goes with the tab
     if (id === state.activeScheduleId) {
         // switch to the first remaining tab without the confirm dance
         const next = state.schedules[0];
@@ -1232,7 +1396,18 @@ function renderScheduleTabs() {
             deleteSchedule(tab.id);
         });
 
-        chip.append(label, count, del);
+        const dup = document.createElement('button');
+        dup.className = 'schedule-tab-duplicate';
+        dup.type = 'button';
+        dup.innerHTML = '⧉';
+        dup.setAttribute('aria-label', `کپی ${tab.name}`);
+        dup.title = 'کپی در برنامه جدید';
+        dup.addEventListener('click', e => {
+            e.stopPropagation();
+            duplicateSchedule(tab.id);
+        });
+
+        chip.append(label, count, dup, del);
         chip.addEventListener('click', () => switchSchedule(tab.id));
         chip.addEventListener('dblclick', () => renameSchedule(tab.id));
         host.appendChild(chip);
@@ -1574,6 +1749,7 @@ function swapCourseGroup(fromId, toId) {
     const toCourse = findCourseById(toId);
     if (!fromCourse || !toCourse) return false;
     if (toCourse.code !== fromCourse.code) return false;
+    const beforeIds = [...state.selectedCourses];
     const idx = state.selectedCourses.indexOf(fromId);
     if (idx === -1) {
         showToast('این گروه در برنامه نیست', 'warning');
@@ -1602,6 +1778,10 @@ function swapCourseGroup(fromId, toId) {
     updateSummary();
     refreshLists();
     renderSchedule();
+    pushHistory(beforeIds, slotsOfCourses([fromId]));
+
+    // Swap = chess move: shine the incoming group, trail on the old cells
+    shineCourses([toId], slotsOfCourses([fromId]));
     showToast(`"${toCourse.name}" به گروه ${toPersianNumber(toCourse.group)} سواپ شد`, 'success');
     return true;
 }
@@ -1644,12 +1824,17 @@ function addCourse(courseId) {
     }
 
     const wasOverLimit = getTotalUnits() > CONFIG.MAX_UNITS;
+    const beforeIds = [...state.selectedCourses];
 
     state.selectedCourses.push(courseId);
     saveSchedules();
     updateSummary();
     refreshLists();
     renderSchedule();
+    pushHistory(beforeIds);
+
+    // Chess-move feedback: shine on the new block + trail on its cells
+    shineCourses([courseId], slotsOfCourses([courseId]));
 
     showToast(`درس "${course.name}" اضافه شد`, 'success');
 
@@ -1670,11 +1855,15 @@ function removeCourse(courseId) {
     if (index === -1) return;
 
     const course = findCourseById(courseId);
+    const beforeIds = [...state.selectedCourses];
     state.selectedCourses.splice(index, 1);
     saveSchedules();
     updateSummary();
     refreshLists();
     renderSchedule();
+    pushHistory(beforeIds, slotsOfCourses([courseId]));
+    // Removed course leaves a ghost trail on its old cells
+    if (course) ghostTrail(slotsOfCourses([courseId]), []);
 
     // Keep the search modal open; close other modals (course info etc.)
     const searchWasOpen = isSearchModalOpen();
@@ -1691,12 +1880,15 @@ function resetSchedule() {
     }
 
     if (confirm('آیا مطمئن هستید که می‌خواهید تمام دروس این برنامه را حذف کنید؟')) {
+        const beforeIds = [...state.selectedCourses];
         state.selectedCourses = [];
         state.unitsWarned = false;
         saveSchedules();
         updateSummary();
         refreshLists();
         renderSchedule();
+        pushHistory(beforeIds, slotsOfCourses(beforeIds));
+        ghostTrail(slotsOfCourses(beforeIds), []);
         showToast('برنامه ریست شد', 'info');
     }
 }
@@ -1813,6 +2005,7 @@ function renderSchedule() {
     }
 
     elements.scheduleBody.querySelectorAll('.course-block').forEach(el => el.remove());
+    elements.scheduleBody.querySelectorAll('.ghost-trail').forEach(el => el.remove());
 
     state.selectedCourses.forEach(courseId => {
         const course = findCourseById(courseId);
@@ -2057,6 +2250,7 @@ function renderTransposedSchedule() {
     }
 
     elements.scheduleBody.querySelectorAll('.course-block').forEach(el => el.remove());
+    elements.scheduleBody.querySelectorAll('.ghost-trail').forEach(el => el.remove());
     elements.scheduleBody.querySelectorAll('td.span-covered').forEach(el => el.classList.remove('span-covered'));
 
     state.selectedCourses.forEach(courseId => {
@@ -3789,8 +3983,12 @@ function setupEventListeners() {
     elements.btnCost.addEventListener('click', openCostModal);
     elements.btnExportPDF.addEventListener('click', exportPDF);
     elements.btnReset.addEventListener('click', resetSchedule);
+    elements.btnUndo.addEventListener('click', undoSchedule);
+    elements.btnRedo.addEventListener('click', redoSchedule);
 
     // Mobile floating action dock — same actions as the controls above
+    elements.btnUndoM.addEventListener('click', undoSchedule);
+    elements.btnRedoM.addEventListener('click', redoSchedule);
     elements.btnViewListM.addEventListener('click', () => {
         renderSelectedList();
         elements.listModal.classList.add('active');
