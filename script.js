@@ -1224,7 +1224,7 @@ function slotsOfCourses(ids) {
 
 /** Faint trail highlight on the OLD cells (chess move origin) */
 function ghostTrail(oldSlots, newSlots) {
-    document.querySelectorAll('.schedule-body .ghost-trail').forEach(el => el.remove());
+    elements.scheduleBody.querySelectorAll('.ghost-trail').forEach(el => el.remove());
     oldSlots.forEach(s => {
         const cell = elements.scheduleBody.querySelector(
             `tr[data-day="${s.day}"] td[data-hour="${s.hour}"]`);
@@ -1248,16 +1248,16 @@ function shineCourses(ids, oldSlots) {
             });
     });
     ghostTrail(oldSlots || [], []);
-    // keep trail visible for ~2s
+    // keep trail visible for ~3s, then fade
 }
 
 function scheduleTrailCleanup() {
     setTimeout(() => {
-        document.querySelectorAll('.schedule-body .ghost-trail').forEach(el => {
+        elements.scheduleBody.querySelectorAll('.ghost-trail').forEach(el => {
             el.classList.add('fade-out');
             setTimeout(() => el.remove(), 400);
         });
-    }, 2000);
+    }, 3000);
 }
 
 function getActiveSchedule() {
