@@ -18,6 +18,7 @@
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="combo.css">
     <link rel="stylesheet" href="io.css">
+    <link rel="stylesheet" href="validations.css">
 </head>
 <body class="dark-mode">
 
@@ -196,6 +197,13 @@
                         <line x1="12" y1="3" x2="12" y2="15"></line>
                     </svg>
                     <span>دیتای دلخواه</span>
+                </button>
+
+                <button class="control-btn secondary" id="btnValidations">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
+                    </svg>
+                    <span>تنظیمات ولیدیشن</span>
                 </button>
 
                 <button class="control-btn danger" id="btnReset">
@@ -395,6 +403,12 @@
                     <line x1="12" y1="15" x2="12" y2="3"></line>
                 </svg>
                 <span>ورود/خروجی</span>
+            </button>
+            <button type="button" class="bar-btn" id="btnValidationsM">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
+                </svg>
+                <span>تنظیمات ولیدیشن</span>
             </button>
             <button type="button" class="bar-btn" id="btnCustomDataM">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -717,6 +731,100 @@
             </div>
             <div class="modal-footer">
                 <button class="btn-secondary" id="btnCloseConflictModal">متوجه شدم</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dataset Rematch Report Modal (گزارش تطبیق دیتا) -->
+    <div class="modal-overlay" id="datasetReportModal">
+        <div class="modal-content modal-large dataset-report-modal">
+            <div class="modal-header">
+                <h3 class="modal-title" id="datasetReportTitle">بررسی دروس تطبیق‌نخورده</h3>
+                <button class="modal-close" id="closeDatasetReport" aria-label="بستن">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p class="dr-hint">
+                    دروس زیر در دیتای جدید عیناً پیدا نشدند. اگر گروه‌های دیگری از همان درس (با همان کد) موجود باشد،
+                    می‌توانید جایگزین انتخاب کنید — وگرنه از برنامه حذف می‌شوند. بقیه دروس برنامه‌ها دست‌نخورده ماندند.
+                </p>
+                <div id="datasetReportBody" class="dr-body-list"><!-- Filled by JS --></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="btnDatasetReportCancel">حذف تطبیق‌نخورده‌ها</button>
+                <button class="btn-primary" id="btnDatasetReportApply">اعمال انتخاب‌ها</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Validation Settings Modal (تنظیمات ولیدیشن) -->
+    <div class="modal-overlay" id="validationModal">
+        <div class="modal-content modal-small validation-modal">
+            <div class="modal-header">
+                <h3 class="modal-title" id="validationModalTitle">تنظیمات ولیدیشن</h3>
+                <button class="modal-close" id="btnValidationsClose" aria-label="بستن">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p class="validation-hint">
+                    ولیدیشن‌هایی که خاموش می‌کنید فقط روی همین تب (برنامه) اعمال می‌شوند و با لینک اشتراک و خروجی JSON هم منتقل می‌شوند.
+                </p>
+
+                <div class="validation-rules" id="validationRulesList">
+                    <div class="validation-rule" data-rule="capacity">
+                        <div class="validation-rule-text">
+                            <span class="validation-rule-title">بررسی ظرفیت دروس</span>
+                            <span class="validation-rule-desc">وقتی روشن است، درس‌های با ظرفیت پر قابل انتخاب نیستند.</span>
+                        </div>
+                        <button type="button" class="validation-toggle" aria-label="روشن/خاموش کردن بررسی ظرفیت"><span class="validation-toggle-knob"></span></button>
+                        <span class="validation-state">روشن</span>
+                    </div>
+                    <div class="validation-rule" data-rule="duplicate">
+                        <div class="validation-rule-text">
+                            <span class="validation-rule-title">انتخاب تکراری هر درس</span>
+                            <span class="validation-rule-desc">وقتی روشن است، هر درس فقط یک‌بار (از یک گروه) قابل برداشتن است.</span>
+                        </div>
+                        <button type="button" class="validation-toggle" aria-label="روشن/خاموش کردن انتخاب تکراری"><span class="validation-toggle-knob"></span></button>
+                        <span class="validation-state">روشن</span>
+                    </div>
+                    <div class="validation-rule" data-rule="conflict">
+                        <div class="validation-rule-text">
+                            <span class="validation-rule-title">تداخل زمانی دروس</span>
+                            <span class="validation-rule-desc">وقتی روشن است، تداخل ساعت کلاس‌ها محاسبه و جلوی انتخاب گرفته می‌شود.</span>
+                        </div>
+                        <button type="button" class="validation-toggle" aria-label="روشن/خاموش کردن تداخل زمانی"><span class="validation-toggle-knob"></span></button>
+                        <span class="validation-state">روشن</span>
+                    </div>
+                    <div class="validation-rule" data-rule="units">
+                        <div class="validation-rule-text">
+                            <span class="validation-rule-title">هشدار تعداد واحد مجاز</span>
+                            <span class="validation-rule-desc">وقتی روشن است، عبور از ۲۰ واحد هشدار و فلگ قرمز نشان می‌دهد.</span>
+                        </div>
+                        <button type="button" class="validation-toggle" aria-label="روشن/خاموش کردن هشدار واحد"><span class="validation-toggle-knob"></span></button>
+                        <span class="validation-state">روشن</span>
+                    </div>
+                </div>
+
+                <div class="validation-summary-line" id="validationSummary">همه ولیدیشن‌ها در این برنامه روشن‌اند</div>
+
+                <div class="validation-apply-block">
+                    <div class="validation-apply-header">اعمال گروهی تنظیمات</div>
+                    <p class="validation-hint">این تنظیمات را روی برنامه‌های دیگر هم بریز — یا تعیین کن برنامه‌های جدید با همین تنظیمات ساخته شوند.</p>
+                    <div class="validation-apply-list" id="validationApplyList"><!-- Filled by JS --></div>
+                    <button type="button" class="btn-primary validation-apply-btn" id="btnValidationsApply">اعمال روی انتخاب‌شده‌ها</button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="btnValidationsReset">بازگشت به پیش‌فرض</button>
+                <button class="btn-primary" id="btnValidationsConfirm">تایید</button>
             </div>
         </div>
     </div>

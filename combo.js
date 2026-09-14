@@ -40,6 +40,14 @@ function getCourseVariants(code) {
     return getListCourses().filter(c => c.code === code);
 }
 
+/** Best representative group of a code for pickers: a group with free seats
+ *  when one exists (so pickers never show a full group while a free one hides),
+ *  otherwise the first group. */
+function getRepresentativeVariant(code) {
+    const variants = getCourseVariants(code);
+    return variants.find(c => c.capacity === 0 || c.registered < c.capacity) || variants[0];
+}
+
 /** Courses available in search: hide passed ones and already-wanted ones */
 function getComboCandidates(query) {
     const q = query.trim().toLowerCase();
@@ -47,11 +55,13 @@ function getComboCandidates(query) {
     const wantedSet = new Set(comboState.wanted);
     return getListCourses().filter(c => {
         if (passedSet.has(c.code) || wantedSet.has(c.code)) return false;
-        // Keep only the first group of each code so the picker shows one row per course
-        return getCourseVariants(c.code)[0] === c;
+        // Keep one representative group per code so the picker shows one row per course
+        return getRepresentativeVariant(c.code) === c;
     }).filter(c => {
         if (!q) return true;
+        const qNorm = (typeof normalizedFaText === 'function' ? normalizedFaText(q) : q);
         return c.name.toLowerCase().includes(q) ||
+               (typeof normalizedFaText === 'function' ? normalizedFaText(c.name).toLowerCase().includes(qNorm) : false) ||
                c.professor.toLowerCase().includes(q) ||
                c.code.includes(q);
     }).slice(0, 12);
@@ -63,19 +73,21 @@ function getPassedCandidates(query) {
     const passedSet = new Set(comboState.passed);
     return getListCourses().filter(c => {
         if (passedSet.has(c.code)) return false;
-        return getCourseVariants(c.code)[0] === c;
+        return getRepresentativeVariant(c.code) === c;
     }).filter(c => {
         if (!q) return true;
+        const qNorm = (typeof normalizedFaText === 'function' ? normalizedFaText(q) : q);
         return c.name.toLowerCase().includes(q) ||
+               (typeof normalizedFaText === 'function' ? normalizedFaText(c.name).toLowerCase().includes(qNorm) : false) ||
                c.professor.toLowerCase().includes(q) ||
                c.code.includes(q);
     }).slice(0, 12);
 }
 
-/** One representative course per wanted code (first group) — for chip display */
+/** One representative course per wanted code (free-seats group first) — for chip display */
 function getWantedRepresentatives() {
     return comboState.wanted
-        .map(code => getCourseVariants(code)[0])
+        .map(code => getRepresentativeVariant(code))
         .filter(Boolean);
 }
 
@@ -104,7 +116,7 @@ function renderPassedSection() {
     const count = document.getElementById('comboPassedCount');
     if (!count) return;
     const reps = comboState.passed
-        .map(code => getCourseVariants(code)[0])
+        .map(code => getRepresentativeVariant(code))
         .filter(Boolean);
 
     if (!reps.length) {
@@ -307,6 +319,7 @@ function applyCombo(ids, btn) {
     else saveToStorage();
     state.unitsWarned = false;
     updateSummary();
+    updateUnitsFlag();
     refreshLists();
     renderSchedule();
     btn.textContent = '✔ انتخاب شد';

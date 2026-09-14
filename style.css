@@ -867,6 +867,10 @@ body.modal-open {
     color: var(--danger);
     flex-shrink: 0;
 }
+/* Full-but-swappable (capacity rule OFF): informational badge next to the swap button */
+.course-variant-full.soft {
+    color: var(--warning);
+}
 .course-variant-row .btn-swap-group {
     width: auto;
     margin-top: 0;
@@ -2872,7 +2876,43 @@ body.modal-open {
     }
 
     .summary-controls {
-        flex-wrap: nowrap;
+        flex-wrap: wrap;
+        gap: var(--space-3);
+    }
+
+    /* Compact summary box that hugs its content */
+    .selection-summary {
+        flex: 0 0 auto;
+        gap: var(--space-4);
+        padding: var(--space-2) var(--space-4);
+    }
+
+    /* Toolbar: full-width row(s) under the summary — buttons start at the
+       RTL reading edge (right) and wrap as even, tidy rows */
+    .controls-wrapper {
+        flex: 1 1 100%;
+        min-width: 0;
+        justify-content: flex-start;
+        gap: var(--space-2);
+    }
+
+    /* Uniform compact buttons: no label wrapping, consistent metrics */
+    .control-btn {
+        padding: 8px var(--space-3);
+        font-size: 12.5px;
+        gap: 6px;
+        white-space: nowrap;
+    }
+
+    .control-btn svg {
+        width: 16px;
+        height: 16px;
+    }
+
+    /* History + destructive group anchors to the far end (left in RTL):
+       actions read from the right, state controls sit opposite */
+    .control-btn#btnReset {
+        margin-inline-start: auto;
     }
 
     .app-title {
@@ -3308,4 +3348,213 @@ body.modal-open {
 .schedule-tab-duplicate:hover {
     color: var(--accent, #818cf8);
     background-color: rgba(99, 102, 241, 0.15);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   DATASET REPORT MODAL (گزارش تطبیق دیتا)
+   Per-tab lost courses + replacement options after a dataset swap.
+   ═══════════════════════════════════════════════════════════════ */
+
+.dataset-report-modal .modal-body {
+    max-height: 60vh;
+}
+
+.dr-hint {
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    line-height: 1.9;
+    margin: 0 0 var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    background-color: var(--bg-tertiary);
+    border: 1.5px solid var(--border-primary);
+    border-radius: var(--radius-md);
+}
+
+.dr-body-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.dr-tab-block {
+    border: 1.5px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.dr-tab-title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px;
+    padding: var(--space-3) var(--space-4);
+    background-color: var(--bg-tertiary);
+    border-bottom: 1.5px solid var(--border-primary);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-bold);
+    color: var(--text-primary);
+}
+
+.dr-tab-meta {
+    font-size: 11.5px;
+    font-weight: var(--font-medium);
+    color: var(--text-secondary);
+}
+
+.dr-lost-item {
+    padding: var(--space-3) var(--space-4);
+}
+
+.dr-lost-item + .dr-lost-item {
+    border-top: 1.5px dashed var(--border-primary);
+}
+
+.dr-lost-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+
+.dr-lost-name {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-semibold);
+    color: var(--warning);
+}
+
+.dr-lost-meta {
+    font-size: 11.5px;
+    color: var(--text-secondary);
+}
+
+.dr-options {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.dr-option {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    background-color: var(--bg-primary);
+    border: 1.5px solid var(--border-primary);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: border-color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.dr-option:hover {
+    border-color: var(--border-focus);
+}
+
+.dr-option:has(input:checked) {
+    border-color: var(--accent, #818cf8);
+    background-color: rgba(99, 102, 241, 0.08);
+}
+
+.dr-option input[type="radio"] {
+    accent-color: var(--accent, #818cf8);
+    flex-shrink: 0;
+}
+
+.dr-option-main {
+    font-size: 12.5px;
+    color: var(--text-primary);
+}
+
+.dr-option-main b {
+    color: var(--text-primary);
+}
+
+.dr-option-sched {
+    flex-basis: 100%;
+    font-size: 11px;
+    color: var(--text-tertiary);
+    padding-inline-start: 24px;
+}
+
+.dr-option-drop .dr-option-main {
+    color: var(--text-secondary);
+}
+
+.dr-no-options {
+    font-size: 12px;
+    color: var(--danger);
+    padding: 7px 10px;
+    background: rgba(239, 68, 68, 0.07);
+    border: 1.5px dashed rgba(239, 68, 68, 0.4);
+    border-radius: var(--radius-sm);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TAB CONTEXT MENU (right-click on desktop, long-press on mobile)
+   Actions: rename · duplicate — same as dblclick + ⧉ button.
+   ═══════════════════════════════════════════════════════════════ */
+
+.tab-context-menu {
+    position: fixed;
+    z-index: var(--z-dropdown, 100);
+    min-width: 190px;
+    padding: 4px;
+    background-color: var(--bg-elevated);
+    border: 2px solid var(--border-secondary);
+    border-radius: var(--radius-md);
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.45);
+    display: none; /* hidden until opened */
+    flex-direction: column;
+    gap: 2px;
+    user-select: none;
+}
+
+.tab-context-menu.visible {
+    display: flex;
+    animation: tabMenuIn var(--transition-fast) ease;
+}
+
+@keyframes tabMenuIn {
+    from { opacity: 0; transform: scale(0.96); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+.tab-context-menu button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 10px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-primary);
+    font-family: var(--font-family);
+    font-size: 13px;
+    font-weight: var(--font-semibold);
+    text-align: start;
+    cursor: pointer;
+    transition: background-color var(--transition-fast);
+}
+
+.tab-context-menu button:hover {
+    background-color: var(--bg-hover);
+}
+
+.tab-context-menu button:active {
+    background-color: var(--bg-hover);
+}
+
+/* Haptic-ish feedback: chip dims while the long-press is held.
+   Only applies on coarse pointers so desktop hover is unaffected. */
+@media (pointer: coarse) {
+    .schedule-tab {
+        -webkit-touch-callout: none; /* suppress iOS native callout */
+    }
+
+    .schedule-tab.pressing {
+        opacity: 0.6;
+        transform: scale(0.97);
+    }
 }

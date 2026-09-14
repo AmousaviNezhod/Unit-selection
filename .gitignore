@@ -1,5 +1,7 @@
 # Claude Code local settings
 .claude/
+react-app/
+
 
 # OS junk
 Thumbs.db
@@ -11,3 +13,6 @@ Desktop.ini
 
 # Editor backups
 *~
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/

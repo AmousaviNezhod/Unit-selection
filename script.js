@@ -34,6 +34,8 @@ const CONFIG = {
     DEGREE_KEY: 'university_scheduler_degree',
     PRICES_KEY: 'university_scheduler_prices',
     SCHEDULES_KEY: 'university_scheduler_schedules',
+    VALIDATIONS_KEY: 'university_scheduler_validation_overrides',
+    FUTURE_VALIDATIONS_KEY: 'university_scheduler_future_validations',
 
     // Schedule settings
     DAYS: ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه'],
@@ -64,6 +66,18 @@ const CONFIG = {
 // STATE MANAGEMENT
 // ═══════════════════════════════════════════════════════════════
 
+/**
+ * Validation overrides — which built-in rules the user has switched off.
+ * true = rule enforced (default); false = rule bypassed.
+ * Stored PER SCHEDULE TAB (in each tab entry) + persisted to VALIDATIONS_KEY.
+ */
+const DEFAULT_VALIDATIONS = Object.freeze({
+    capacity: true,    // Block courses whose capacity is full
+    duplicate: true,   // Block taking the same course (code) more than once
+    conflict: true,    // Calculate/block time conflicts between courses
+    units: true        // Show the over-limit (>۲۰ units) warning
+});
+
 const state = {
     defaultCourses: [],     // From data/courses.txt
     customCourses: [],      // From user-pasted HTML table
@@ -71,6 +85,8 @@ const state = {
     selectedCourses: [],    // Selected course IDs (code-group) of the ACTIVE schedule
     schedules: [],          // [{ id, name, courses: [] }] — one entry per tab
     activeScheduleId: '',   // Currently shown schedule tab
+    pendingShareValidations: null, // Validation overrides carried by a share link
+    futureValidationOverrides: null, // Overrides auto-applied to newly created tabs
     history: {},            // Per-tab undo/redo stacks: { tabId: { stack: [ids[]], pointer } }
     prices: {},             // Course code -> unit price (from data/couresPrice.html)
     currentModalCourse: null,
@@ -144,9 +160,95 @@ function loadSavedDegree() {
     }
 }
 
+/** Active tab's validation overrides (never null) */
+function getValidationOverrides() {
+    const tab = getActiveSchedule();
+    if (!tab) return { ...DEFAULT_VALIDATIONS };
+    const v = tab.validationOverrides;
+    return { ...DEFAULT_VALIDATIONS, ...(v && typeof v === 'object' ? v : {}) };
+}
+
+/** Is a rule currently enforced on the active tab? */
+function isValidationEnabled(key) {
+    return getValidationOverrides()[key] !== false;
+}
+
+/** Number of rules the active tab has switched off (tab chip badge) */
+function countDisabledValidations(tab = null) {
+    const source = tab || getActiveSchedule();
+    if (!source || !source.validationOverrides) return 0;
+    return Object.values(source.validationOverrides).filter(v => v === false).length;
+}
+
+/** Apply `patch` to the active tab's overrides, persist and refresh the UI
+ *  (course cards must re-render so e.g. full courses become pickable LIVE) */
+function setValidationOverrides(patch) {
+    const tab = getActiveSchedule();
+    if (!tab) return;
+    tab.validationOverrides = { ...getValidationOverrides(), ...patch };
+    saveSchedules();
+    updateUnitsFlag();
+    renderScheduleTabs();
+    refreshLists();
+}
+
+/** Reset the active tab's overrides back to all-on */
+function resetValidationOverrides() {
+    const tab = getActiveSchedule();
+    if (!tab) return;
+    delete tab.validationOverrides;
+    saveSchedules();
+    updateUnitsFlag();
+    renderScheduleTabs();
+    refreshLists();
+}
+
+/** Copy `overrides` onto a target tab (share link / bulk apply), defaulting to active */
+function applyValidationsToTab(tabId, overrides) {
+    const tab = state.schedules.find(t => t.id === tabId);
+    if (!tab) return;
+    if (!overrides || Object.keys(overrides).length === 0) {
+        delete tab.validationOverrides;
+    } else {
+        tab.validationOverrides = { ...DEFAULT_VALIDATIONS, ...overrides };
+    }
+    saveSchedules();
+    if (tab.id === state.activeScheduleId) {
+        updateUnitsFlag();
+        renderScheduleTabs();
+        refreshLists();
+    }
+}
+
+/** Load the persisted overrides map { tabId: {...} } (or null) */
+function loadValidationOverrides() {
+    try {
+        const raw = localStorage.getItem(CONFIG.VALIDATIONS_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        return (parsed && typeof parsed === 'object') ? parsed : null;
+    } catch (error) {
+        console.error('Error loading validation overrides:', error);
+        return null;
+    }
+}
+
+/** Persist the overrides map { tabId: {...} } */
+function saveValidationOverrides() {
+    try {
+        const map = {};
+        state.schedules.forEach(tab => {
+            if (tab.validationOverrides) map[tab.id] = tab.validationOverrides;
+        });
+        localStorage.setItem(CONFIG.VALIDATIONS_KEY, JSON.stringify(map));
+    } catch (error) {
+        console.error('Error saving validation overrides:', error);
+    }
+}
+
 /** Is a course selectable? Capacity-full courses are locked (unless already selected) */
 function isSelectable(course) {
-    if (!isCapacityAvailable(course)) return false;
+    if (isValidationEnabled('capacity') && !isCapacityAvailable(course)) return false;
     return state.customActive
         ? state.customCourses.some(c => getCourseId(c) === getCourseId(course))
         : true;
@@ -298,6 +400,26 @@ const elements = {
     conflictMessage: document.getElementById('conflictMessage'),
     closeConflictModal: document.getElementById('closeConflictModal'),
     btnCloseConflictModal: document.getElementById('btnCloseConflictModal'),
+
+    // Dataset report modal (گزارش تطبیق دیتا)
+    datasetReportModal: document.getElementById('datasetReportModal'),
+    datasetReportTitle: document.getElementById('datasetReportTitle'),
+    datasetReportBody: document.getElementById('datasetReportBody'),
+    btnDatasetReportApply: document.getElementById('btnDatasetReportApply'),
+    btnDatasetReportCancel: document.getElementById('btnDatasetReportCancel'),
+    closeDatasetReport: document.getElementById('closeDatasetReport'),
+
+    // Validation settings modal (تنظیمات ولیدیشن)
+    btnValidations: document.getElementById('btnValidations'),
+    btnValidationsM: document.getElementById('btnValidationsM'),
+    validationModal: document.getElementById('validationModal'),
+    validationModalTitle: document.getElementById('validationModalTitle'),
+    validationRulesList: document.getElementById('validationRulesList'),
+    validationApplyList: document.getElementById('validationApplyList'),
+    validationSummary: document.getElementById('validationSummary'),
+    btnValidationsApply: document.getElementById('btnValidationsApply'),
+    btnValidationsReset: document.getElementById('btnValidationsReset'),
+    btnValidationsClose: document.getElementById('btnValidationsClose'),
 
     // Share-link landing modal
     shareLandingModal: document.getElementById('shareLandingModal'),
@@ -1077,6 +1199,7 @@ function pruneSelections(courses) {
 
 /** Load schedule tabs; first run seeds one tab from the old single-selection key */
 function loadSchedules() {
+    const overridesMap = loadValidationOverrides();
     try {
         const saved = localStorage.getItem(CONFIG.SCHEDULES_KEY);
         if (saved) {
@@ -1087,6 +1210,11 @@ function loadSchedules() {
                     ? parsed.activeId
                     : state.schedules[0].id;
                 state.selectedCourses = [...(getActiveSchedule()?.courses || [])];
+                // Re-attach the per-tab validation overrides
+                state.schedules.forEach(tab => {
+                    const o = overridesMap && overridesMap[tab.id];
+                    if (o && typeof o === 'object') tab.validationOverrides = { ...DEFAULT_VALIDATIONS, ...o };
+                });
                 return;
             }
         }
@@ -1105,7 +1233,8 @@ function loadSchedules() {
 }
 
 /** Persist the tab list; the active tab's courses are also mirrored to
- *  STORAGE_KEY (share-link restore + combo.js write there) */
+ *  STORAGE_KEY (share-link restore + combo.js write there). Per-tab
+ *  validation overrides ride along to VALIDATIONS_KEY. */
 function saveSchedules() {
     const tab = getActiveSchedule();
     if (tab) tab.courses = [...state.selectedCourses];
@@ -1115,6 +1244,7 @@ function saveSchedules() {
             activeId: state.activeScheduleId
         }));
         localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(state.selectedCourses));
+        saveValidationOverrides();
     } catch (error) {
         console.error('Error saving schedules:', error);
     }
@@ -1281,6 +1411,10 @@ function createSchedule() {
     while (state.schedules.some(t => t.id === id)) id = 'tab' + Date.now() + Math.floor(Math.random() * 100);
     const name = `برنامه ${toPersianNumber(state.schedules.length + 1)}`;
     state.schedules.push({ id, name, courses: [] });
+    // "Future tabs" bulk option: new tabs inherit the saved validation overrides
+    if (state.futureValidationOverrides) {
+        state.schedules[state.schedules.length - 1].validationOverrides = { ...state.futureValidationOverrides };
+    }
     switchSchedule(id);
     showToast(`"${name}" ساخته شد`, 'success');
 }
@@ -1296,6 +1430,7 @@ function duplicateSchedule(id) {
     let newId = 'tab' + Date.now();
     while (state.schedules.some(t => t.id === newId)) newId = 'tab' + Date.now() + Math.floor(Math.random() * 100);
     const copy = { id: newId, name: `${tab.name} (کپی)`.slice(0, 40), courses: [...tab.courses] };
+    if (tab.validationOverrides) copy.validationOverrides = { ...tab.validationOverrides };
     state.schedules.push(copy);
     switchSchedule(newId);
     renderScheduleTabs();
@@ -1364,6 +1499,112 @@ function renameSchedule(id) {
     renderScheduleTabs();
 }
 
+// ── Tab context menu (right-click on desktop, long-press on mobile) ──
+
+let tabMenuEl = null;          // singleton menu element
+let tabMenuTabId = null;       // tab the menu is acting on
+let tabMenuLongPressTimer = null;
+let tabMenuSuppressNextClick = false; // swallow the click after a long-press
+
+const TAB_MENU_LONG_PRESS_MS = 500;
+
+/** Build the singleton context menu once */
+function ensureTabMenuEl() {
+    if (tabMenuEl) return tabMenuEl;
+    tabMenuEl = document.createElement('div');
+    tabMenuEl.className = 'tab-context-menu';
+    tabMenuEl.setAttribute('role', 'menu');
+    tabMenuEl.innerHTML = `
+        <button type="button" role="menuitem" data-action="rename">✏️ تغییر نام</button>
+        <button type="button" role="menuitem" data-action="duplicate">⧉ کپی در برنامه جدید</button>`;
+    document.body.appendChild(tabMenuEl);
+
+    tabMenuEl.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-action]');
+        const id = tabMenuTabId;
+        hideTabMenu();
+        if (!btn || !id) return;
+        if (btn.dataset.action === 'rename') renameSchedule(id);
+        else if (btn.dataset.action === 'duplicate') duplicateSchedule(id);
+    });
+
+    // Dismiss: any click outside the menu (the long-press click is swallowed first)
+    document.addEventListener('click', (e) => {
+        if (tabMenuSuppressNextClick) {
+            tabMenuSuppressNextClick = false;
+            return;
+        }
+        if (isTabMenuOpen() && !tabMenuEl.contains(e.target)) hideTabMenu();
+    });
+    window.addEventListener('scroll', hideTabMenu, true);
+    window.addEventListener('resize', hideTabMenu);
+
+    return tabMenuEl;
+}
+
+function isTabMenuOpen() {
+    return tabMenuEl && tabMenuEl.classList.contains('visible');
+}
+
+function hideTabMenu() {
+    if (!tabMenuEl) return;
+    tabMenuEl.classList.remove('visible');
+    tabMenuTabId = null;
+}
+
+/** Open the menu for `tabId` at viewport coords, clamped to the screen */
+function showTabMenu(tabId, x, y) {
+    const el = ensureTabMenuEl();
+    tabMenuTabId = tabId;
+    el.classList.add('visible');
+    el.style.visibility = 'hidden';
+    // Measure, then clamp inside the viewport (8px margin)
+    const rect = el.getBoundingClientRect();
+    const left = Math.max(8, Math.min(x, window.innerWidth - rect.width - 8));
+    const top = Math.max(8, Math.min(y, window.innerHeight - rect.height - 8));
+    el.style.left = `${left}px`;
+    el.style.top = `${top}px`;
+    el.style.visibility = '';
+}
+
+function clearTabMenuPressTimer() {
+    if (tabMenuLongPressTimer) {
+        clearTimeout(tabMenuLongPressTimer);
+        tabMenuLongPressTimer = null;
+    }
+}
+
+/** Wire right-click + long-press onto a tab chip */
+function bindTabContextMenu(chip, tabId) {
+    // Desktop: right-click opens the menu (blocks the browser's own)
+    chip.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        showTabMenu(tabId, e.clientX, e.clientY);
+    });
+
+    // Mobile: hold the tab ~500ms to open the menu at the finger
+    chip.addEventListener('touchstart', (e) => {
+        if (e.touches.length !== 1) return;
+        const touch = e.touches[0];
+        clearTabMenuPressTimer();
+        chip.classList.add('pressing');
+        tabMenuLongPressTimer = setTimeout(() => {
+            tabMenuLongPressTimer = null;
+            chip.classList.remove('pressing');
+            showTabMenu(tabId, touch.clientX, touch.clientY);
+            // The touchend that follows must not also switch tabs / close the menu
+            tabMenuSuppressNextClick = true;
+        }, TAB_MENU_LONG_PRESS_MS);
+    }, { passive: true });
+    const cancelPress = () => {
+        chip.classList.remove('pressing');
+        clearTabMenuPressTimer();
+    };
+    chip.addEventListener('touchmove', cancelPress, { passive: true });
+    chip.addEventListener('touchend', cancelPress, { passive: true });
+    chip.addEventListener('touchcancel', cancelPress, { passive: true });
+}
+
 /** Render the tab chips above the schedule table */
 function renderScheduleTabs() {
     const host = elements.scheduleTabs;
@@ -1373,7 +1614,7 @@ function renderScheduleTabs() {
     state.schedules.forEach(tab => {
         const chip = document.createElement('div');
         chip.className = 'schedule-tab' + (tab.id === state.activeScheduleId ? ' active' : '');
-        chip.title = 'دابل‌کلیک: تغییر نام';
+        chip.title = 'راست‌کلیک: منو · دابل‌کلیک: تغییر نام';
 
         const label = document.createElement('span');
         label.className = 'schedule-tab-name';
@@ -1384,6 +1625,16 @@ function renderScheduleTabs() {
         count.textContent = toPersianNumber(tab.id === state.activeScheduleId
             ? state.selectedCourses.length
             : tab.courses.length);
+
+        // Badge: how many validation rules this tab has switched off
+        const offCount = countDisabledValidations(tab);
+        if (offCount > 0) {
+            const valBadge = document.createElement('span');
+            valBadge.className = 'schedule-tab-val-badge';
+            valBadge.textContent = toPersianNumber(offCount);
+            valBadge.title = `${toPersianNumber(offCount)} ولیدیشن خاموش در این برنامه`;
+            chip.appendChild(valBadge);
+        }
 
         const del = document.createElement('button');
         del.className = 'schedule-tab-delete';
@@ -1408,8 +1659,15 @@ function renderScheduleTabs() {
         });
 
         chip.append(label, count, dup, del);
-        chip.addEventListener('click', () => switchSchedule(tab.id));
+        chip.addEventListener('click', () => {
+            if (tabMenuSuppressNextClick) {
+                tabMenuSuppressNextClick = false; // long-press release: don't switch
+                return;
+            }
+            switchSchedule(tab.id);
+        });
         chip.addEventListener('dblclick', () => renameSchedule(tab.id));
+        bindTabContextMenu(chip, tab.id);
         host.appendChild(chip);
     });
 
@@ -1442,9 +1700,17 @@ function isFitMode() {
 
 function matchesQuery(course, q) {
     return course.name.includes(q)
+        || normalizedFaText(course.name).includes(q)
         || course.professor.includes(q)
+        || normalizedFaText(course.professor).includes(q)
         || course.code.includes(q)
         || String(course.group).includes(q);
+}
+
+/** Space/ZWNJ-insensitive mirror of a Persian string: every space and ZWNJ
+ *  is removed, so "در برنامه" (user) matches the portal's "دربرنامه" both ways */
+function normalizedFaText(str) {
+    return String(str || '').replace(/[\s\u200c]+/g, '');
 }
 
 /** Is any advanced filter active? */
@@ -1552,11 +1818,13 @@ function filterCourses(query) {
     }
 
     if (normalizedQuery) {
-        // Normalize Persian digits in query to latin
+        // Normalize Persian digits in query to latin + collapse spaces/ZWNJ so
+        // "در برنامه" matches the portal's "دربرنامه" spelling
         const q = normalizedQuery
             .replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))
             .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
-        list = list.filter(c => matchesQuery(c, q));
+        const qNorm = normalizedFaText(q);
+        list = list.filter(c => matchesQuery(c, q) || matchesQuery(c, qNorm));
     }
 
     list = sortCourses(list);
@@ -1588,11 +1856,13 @@ function courseCardHtml(course) {
         : '';
 
     // Another group of THIS course is on the schedule → offer a swap
+    // (with the capacity rule OFF, full groups are valid swap targets too)
     const selectedVariantId = getSelectedVariantId(course.code);
-    const showSwap = !isSelected && selectedVariantId && selectedVariantId !== courseId && isCapacityAvailable(course);
+    const showSwap = !isSelected && selectedVariantId && selectedVariantId !== courseId &&
+        (isCapacityAvailable(course) || !isValidationEnabled('capacity'));
 
     const swapBtn = showSwap
-        ? `<button class="btn-swap-group" data-swap-from="${selectedVariantId}" data-swap-to="${courseId}">⇄ سواپ با گروه ${toPersianNumber(course.group)}</button>`
+        ? `<button class="btn-swap-group" data-swap-from="${selectedVariantId}" data-swap-to="${courseId}">⇄ جابجا با گروه ${toPersianNumber(course.group)}</button>`
         : '';
 
     const btn = isSelected
@@ -1755,21 +2025,25 @@ function swapCourseGroup(fromId, toId) {
         showToast('این گروه در برنامه نیست', 'warning');
         return false;
     }
-    if (!isCapacityAvailable(toCourse)) {
+    if (!isValidationEnabled('capacity') && !isCapacityAvailable(toCourse)) {
+        // Capacity rule OFF: fall through instead of blocking the swap
+    } else if (!isCapacityAvailable(toCourse)) {
         showToast(`ظرفیت گروه ${toPersianNumber(toCourse.group)} درس "${toCourse.name}" پر شده است`, 'error');
         return false;
     }
 
     // Conflict pass over every selected course EXCEPT the outgoing one
-    const rest = state.selectedCourses
-        .filter(id => id !== fromId)
-        .map(findCourseById)
-        .filter(Boolean);
-    for (const other of rest) {
-        const conflict = checkConflict(toCourse, other);
-        if (conflict.hasConflict) {
-            showConflictModal(toCourse, other, conflict);
-            return false;
+    if (isValidationEnabled('conflict')) {
+        const rest = state.selectedCourses
+            .filter(id => id !== fromId)
+            .map(findCourseById)
+            .filter(Boolean);
+        for (const other of rest) {
+            const conflict = checkConflict(toCourse, other);
+            if (conflict.hasConflict) {
+                showConflictModal(toCourse, other, conflict);
+                return false;
+            }
         }
     }
 
@@ -1782,7 +2056,7 @@ function swapCourseGroup(fromId, toId) {
 
     // Swap = chess move: shine the incoming group, trail on the old cells
     shineCourses([toId], slotsOfCourses([fromId]));
-    showToast(`"${toCourse.name}" به گروه ${toPersianNumber(toCourse.group)} سواپ شد`, 'success');
+    showToast(`"${toCourse.name}" به گروه ${toPersianNumber(toCourse.group)} جابجا شد`, 'success');
     return true;
 }
 
@@ -1797,28 +2071,32 @@ function addCourse(courseId) {
 
     // Same course code in another group (e.g. گروه ۱ vs گروه ۲) counts as the
     // same course — a student takes it once, so block the duplicate
-    const duplicate = state.selectedCourses
-        .map(findCourseById)
-        .find(c => c && c.code === course.code);
-    if (duplicate) {
-        showToast(`درس "${course.name}" را قبلاً برداشته‌اید (گروه ${toPersianNumber(duplicate.group)}) — هر درس فقط یک‌بار قابل انتخاب است`, 'warning');
-        return;
+    if (isValidationEnabled('duplicate')) {
+        const duplicate = state.selectedCourses
+            .map(findCourseById)
+            .find(c => c && c.code === course.code);
+        if (duplicate) {
+            showToast(`درس "${course.name}" را قبلاً برداشته‌اید (گروه ${toPersianNumber(duplicate.group)}) — هر درس فقط یک‌بار قابل انتخاب است`, 'warning');
+            return;
+        }
     }
 
     // Capacity full: selection blocked at the source too (not just UI)
-    if (!isCapacityAvailable(course)) {
+    if (isValidationEnabled('capacity') && !isCapacityAvailable(course)) {
         showToast(`ظرفیت درس "${course.name}" پر شده است`, 'error');
         return;
     }
 
     // Block time conflicts (parity-aware: زوج/فرد sessions sharing a slot don't clash)
-    for (const existingId of state.selectedCourses) {
-        const existingCourse = findCourseById(existingId);
-        if (existingCourse) {
-            const conflict = checkConflict(course, existingCourse);
-            if (conflict.hasConflict) {
-                showConflictModal(course, existingCourse, conflict);
-                return;
+    if (isValidationEnabled('conflict')) {
+        for (const existingId of state.selectedCourses) {
+            const existingCourse = findCourseById(existingId);
+            if (existingCourse) {
+                const conflict = checkConflict(course, existingCourse);
+                if (conflict.hasConflict) {
+                    showConflictModal(course, existingCourse, conflict);
+                    return;
+                }
             }
         }
     }
@@ -1845,7 +2123,7 @@ function addCourse(courseId) {
 
     // 20-unit warning (non-blocking)
     const total = getTotalUnits();
-    if (!wasOverLimit && total > CONFIG.MAX_UNITS) {
+    if (isValidationEnabled('units') && !wasOverLimit && total > CONFIG.MAX_UNITS) {
         showToast(`هشدار: جمع واحدها (${formatUnits(total)}) از ${toPersianNumber(CONFIG.MAX_UNITS)} واحد مجاز بیشتر شد!`, 'warning');
     }
 }
@@ -1879,7 +2157,7 @@ function resetSchedule() {
         return;
     }
 
-    if (confirm('آیا مطمئن هستید که می‌خواهید تمام دروس این برنامه را حذف کنید؟')) {
+    if (confirm('آیا مطمئن هستید که می‌خواهید تمام دروس این برنامه را حذف کنید؟ (تنظیمات ولیدیشن دست‌نخورده می‌ماند)')) {
         const beforeIds = [...state.selectedCourses];
         state.selectedCourses = [];
         state.unitsWarned = false;
@@ -1959,6 +2237,18 @@ function formatToman(amountRial) {
     return formatMoney(Math.round(amountRial / 10)) + ' تومان';
 }
 
+/** Units over-limit flag: shown only when the units rule is ON for the active tab */
+function updateUnitsFlag() {
+    if (!elements.unitsFlag) return;
+    const totalUnits = getTotalUnits();
+    const overLimit = totalUnits > CONFIG.MAX_UNITS && isValidationEnabled('units');
+    elements.totalUnits.classList.toggle('over-limit', overLimit);
+    elements.unitsFlag.classList.toggle('visible', overLimit);
+    elements.unitsFlagText.textContent =
+        `جمع واحدها (${formatUnits(totalUnits)}) از ${toPersianNumber(CONFIG.MAX_UNITS)} واحد مجاز بیشتر شده است!`;
+    elements.scheduleContainer.classList.toggle('over-limit', overLimit);
+}
+
 function updateSummary() {
     const totalCourses = state.selectedCourses.length;
     const totalUnits = getTotalUnits();
@@ -1967,13 +2257,10 @@ function updateSummary() {
     elements.totalUnits.textContent = formatUnits(totalUnits);
     elements.limitUnits.textContent = toPersianNumber(CONFIG.MAX_UNITS);
 
-    // Over-limit styling
-    const overLimit = totalUnits > CONFIG.MAX_UNITS;
+    // Over-limit styling (units rule OFF → flag hidden, counter stays normal)
+    updateUnitsFlag();
+    const overLimit = totalUnits > CONFIG.MAX_UNITS && isValidationEnabled('units');
     elements.totalUnits.classList.toggle('over-limit', overLimit);
-    elements.unitsFlag.classList.toggle('visible', overLimit);
-    elements.unitsFlagText.textContent =
-        `جمع واحدها (${formatUnits(totalUnits)}) از ${toPersianNumber(CONFIG.MAX_UNITS)} واحد مجاز بیشتر شده است!`;
-    elements.scheduleContainer.classList.toggle('over-limit', overLimit);
 
     // Cost (هزینه) — unit price × units per selected course, shown in Toman
     if (elements.totalCost) {
@@ -2326,6 +2613,7 @@ function showCourseModal(course) {
 
     // Other groups (variants) of the same course — swap targets
     const isCourseSelected = state.selectedCourses.includes(getCourseId(course));
+    const capacityLocked = isValidationEnabled('capacity');
     const variants = getListCourses().filter(c => c.code === course.code);
     const variantsHtml = (isCourseSelected && variants.length > 1) ? `
         <div class="course-info-item course-variants-item">
@@ -2333,15 +2621,17 @@ function showCourseModal(course) {
             <div class="course-variants-list">
                 ${variants.filter(v => getCourseId(v) !== getCourseId(course)).map(v => {
                     const vFull = !isCapacityAvailable(v);
+                    const swapAllowed = !vFull || !capacityLocked; // rule OFF → full groups swappable too
                     return `
-                    <div class="course-variant-row ${vFull ? 'full' : ''}">
+                    <div class="course-variant-row ${vFull && capacityLocked ? 'full' : ''}">
                         <div class="course-variant-main">
                             <span class="course-variant-title">گروه ${toPersianNumber(v.group)} — ${escapeHtml(v.professor)}</span>
                             <span class="course-variant-schedule">${scheduleTagsHtml(v)}</span>
                         </div>
-                        ${vFull
-                            ? '<span class="course-variant-full">ظرفیت پر</span>'
-                            : `<button class="btn-swap-group" data-swap-from="${getCourseId(course)}" data-swap-to="${getCourseId(v)}">⇄ سواپ</button>`}
+                        ${swapAllowed
+                            ? `${vFull ? '<span class="course-variant-full soft">ظرفیت پر</span>' : ''}
+                               <button class="btn-swap-group" data-swap-from="${getCourseId(course)}" data-swap-to="${getCourseId(v)}">⇄ جابجا</button>`
+                            : '<span class="course-variant-full">ظرفیت پر</span>'}
                     </div>`;
                 }).join('')}
             </div>
@@ -2403,6 +2693,153 @@ function showConflictModal(newCourse, existingCourse, conflict) {
         ساعت ${toPersianTime(conflict.time1)} با ${toPersianTime(conflict.time2)}
     `;
     elements.conflictModal.classList.add('active');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// VALIDATION SETTINGS (تنظیمات ولیدیشن)
+// Per-tab switches for the built-in rules + bulk apply to other tabs.
+// Saved to VALIDATIONS_KEY and carried by share links / JSON import.
+// ═══════════════════════════════════════════════════════════════
+
+/** Persian labels for the validation rules */
+const VALIDATION_LABELS = {
+    capacity: 'بررسی ظرفیت دروس (درسِ پُر انتخاب نشود)',
+    duplicate: 'محدودیت یک‌بار برداشتن هر درس',
+    conflict: 'محاسبه تداخل زمانی دروس',
+    units: 'هشدار تعداد واحد مجاز (۲۰ واحد)'
+};
+
+/** Section titles in the bulk-apply picker */
+const VALIDATION_APPLY_SECTIONS = [
+    ['active', 'برنامه فعال'],
+    ['others', 'بقیه برنامه‌ها'],
+    ['future', 'برنامه‌های جدید (از این به بعد)']
+];
+
+/** The tab that opened the modal — anchors "برنامه فعال" in bulk apply */
+let validationModalAnchorTabId = null;
+
+/** (Re)fill the modal from the active tab's current overrides */
+function renderValidationSettings() {
+    const overrides = getValidationOverrides();
+    Object.keys(VALIDATION_LABELS).forEach(key => {
+        const row = elements.validationRulesList?.querySelector(`[data-rule="${key}"]`);
+        if (!row) return;
+        row.querySelector('.validation-toggle').classList.toggle('off', overrides[key] === false);
+        row.querySelector('.validation-state').textContent = overrides[key] === false ? 'خاموش' : 'روشن';
+    });
+
+    // Bulk-apply picker: rebuild + re-check previous choices
+    const checked = new Set(
+        Array.from(elements.validationApplyList.querySelectorAll('input:checked'))
+            .map(box => box.dataset.applyTarget)
+    );
+    const offCount = countDisabledValidations();
+    let html = '';
+    VALIDATION_APPLY_SECTIONS.forEach(([sectionKey, title]) => {
+        const boxes = [];
+        if (sectionKey === 'active') {
+            const tab = getActiveSchedule();
+            if (tab) {
+                boxes.push(`
+                    <label class="validation-apply-row">
+                        <input type="checkbox" data-apply-target="${escapeHtml(tab.id)}" ${checked.has(tab.id) ? 'checked' : ''}>
+                        <span>${escapeHtml(tab.name)}</span>
+                        <span class="validation-apply-meta">برنامه فعال</span>
+                        ${countDisabledValidations(tab) ? `<span class="validation-apply-off">${toPersianNumber(countDisabledValidations(tab))} خاموش</span>` : ''}
+                    </label>`);
+            }
+        } else if (sectionKey === 'others') {
+            state.schedules.forEach(tab => {
+                if (tab.id === validationModalAnchorTabId) return;
+                boxes.push(`
+                    <label class="validation-apply-row">
+                        <input type="checkbox" data-apply-target="${escapeHtml(tab.id)}" ${checked.has(tab.id) ? 'checked' : ''}>
+                        <span>${escapeHtml(tab.name)}</span>
+                        ${countDisabledValidations(tab) ? `<span class="validation-apply-off">${toPersianNumber(countDisabledValidations(tab))} خاموش</span>` : ''}
+                    </label>`);
+            });
+        } else {
+            boxes.push(`
+                <label class="validation-apply-row future">
+                    <input type="checkbox" data-apply-target="__future__" ${checked.has('__future__') ? 'checked' : ''}>
+                    <span>برنامه‌هایی که بعداً ساخته می‌شوند</span>
+                </label>`);
+        }
+        if (boxes.length) {
+            html += `<div class="validation-apply-section"><div class="validation-apply-title">${escapeHtml(title)}</div>${boxes.join('')}</div>`;
+        }
+    });
+    elements.validationApplyList.innerHTML = html;
+
+    elements.validationSummary.textContent = offCount
+        ? `در این برنامه ${toPersianNumber(offCount)} ولیدیشن خاموش است`
+        : 'همه ولیدیشن‌ها در این برنامه روشن‌اند';
+    elements.validationSummary.classList.toggle('some-off', offCount > 0);
+}
+
+/** Open the modal, anchored to the active tab */
+function openValidationModal() {
+    validationModalAnchorTabId = state.activeScheduleId;
+    renderValidationSettings();
+    elements.validationModal.classList.add('active');
+}
+
+/** Clicks inside the modal: toggle a rule, bulk-apply, reset, close */
+function handleValidationModalClick(e) {
+    const toggle = e.target.closest('.validation-toggle');
+    if (toggle) {
+        const key = toggle.closest('[data-rule]')?.dataset.rule;
+        if (!key) return;
+        const willBeOff = !toggle.classList.contains('off'); // currently ON → turning OFF
+        setValidationOverrides({ [key]: !willBeOff });
+        renderValidationSettings();
+        showToast(`ولیدیشن "${VALIDATION_LABELS[key]}" ${willBeOff ? 'خاموش' : 'روشن'} شد`, 'info');
+        return;
+    }
+
+    switch (e.target.closest('button')?.id) {
+        case 'btnValidationsApply': {
+            const boxes = Array.from(elements.validationApplyList.querySelectorAll('input:checked'));
+            if (!boxes.length) {
+                showToast('حداقل یک برنامه را انتخاب کنید', 'warning');
+                return;
+            }
+            const overrides = getValidationOverrides();
+            let applied = 0;
+            boxes.forEach(box => {
+                if (box.dataset.applyTarget === '__future__') {
+                    state.futureValidationOverrides = { ...overrides };
+                    try { localStorage.setItem(CONFIG.FUTURE_VALIDATIONS_KEY, JSON.stringify(overrides)); } catch (err) { /* noop */ }
+                } else {
+                    applyValidationsToTab(box.dataset.applyTarget, overrides);
+                    applied++;
+                }
+            });
+            saveSchedules();
+            renderValidationSettings();
+            showToast(`تنظیمات برای ${toPersianNumber(applied)} برنامه اعمال شد${state.futureValidationOverrides ? ' + برنامه‌های جدید' : ''}`, 'success');
+            return;
+        }
+        case 'btnValidationsReset':
+            resetValidationOverrides();
+            renderValidationSettings();
+            showToast('ولیدیشن‌ها به حالت پیش‌فرض (همه روشن) برگشت', 'info');
+            return;
+        case 'btnValidationsConfirm':
+            closeAllModals();
+            return;
+    }
+}
+
+function setupValidationSettings() {
+    elements.btnValidations.addEventListener('click', openValidationModal);
+    elements.btnValidationsM.addEventListener('click', openValidationModal);
+    elements.btnValidationsClose.addEventListener('click', closeAllModals);
+    elements.validationModal.addEventListener('click', handleValidationModalClick);
+    elements.validationModal.addEventListener('click', (e) => {
+        if (e.target === elements.validationModal) closeAllModals();
+    });
 }
 
 function renderSelectedList() {
@@ -2659,6 +3096,185 @@ function updateCustomDataStatus() {
     }
 }
 
+// ── Dataset swap: re-match tabs instead of wiping them ─────────
+
+/** Split a course id back into code/group (fallback for stale entries) */
+function splitCourseId(courseId) {
+    const cut = courseId.lastIndexOf('-');
+    return cut === -1
+        ? { code: courseId, group: '?' }
+        : { code: courseId.slice(0, cut), group: courseId.slice(cut + 1) };
+}
+
+/** Schedule slots as a compact Persian one-liner (for option rows) */
+function slotsSummaryLine(schedule) {
+    if (!schedule || !schedule.length) return 'بدون ساعت کلاس';
+    return schedule.map(s => {
+        const parity = slotParityLabel(s);
+        return `${s.day} ${toPersianTime(s.start)}-${toPersianTime(s.end)}${parity ? ` (${parity})` : ''}`;
+    }).join('، ');
+}
+
+/**
+ * Re-match a tab's course list against a NEW dataset.
+ * - Exact: same code AND group (units may differ slightly) → keep as-is.
+ * - Loose: same code, different group/units → offered as options.
+ * - Gone: code absent from the new dataset → reported with no options.
+ * Must run BEFORE the dataset in state is swapped (old objects are read
+ * through findCourseById for names/metadata).
+ */
+function rematchTabCourses(oldIds, newCourses) {
+    const byId = new Map(newCourses.map(c => [getCourseId(c), c]));
+    const byCode = new Map();
+    newCourses.forEach(c => {
+        if (!byCode.has(c.code)) byCode.set(c.code, []);
+        byCode.get(c.code).push(c);
+    });
+
+    const matched = [];
+    const lost = [];
+    oldIds.forEach(id => {
+        const exact = byId.get(id);
+        if (exact) {
+            matched.push(id);
+            return;
+        }
+        const old = findCourseById(id);
+        const parts = splitCourseId(id);
+        lost.push({
+            oldId: id,
+            name: old ? old.name : 'درس ناشناخته',
+            code: old ? old.code : parts.code,
+            oldGroup: old ? old.group : parts.group,
+            oldProfessor: old ? old.professor : '',
+            options: (byCode.get(old ? old.code : parts.code) || []).map(c => ({
+                id: getCourseId(c),
+                group: c.group,
+                professor: c.professor,
+                units: c.units,
+                schedule: c.schedule
+            }))
+        });
+    });
+    return { matched, lost };
+}
+
+/**
+ * After a dataset swap, re-match EVERY tab against the new courses and
+ * keep what still fits. Tabs never get wiped; anything unmatched is
+ * reported in the dataset-report modal (with replacement options).
+ * Returns { totalLost } for the toast.
+ */
+function rematchAllTabsAgainstDataset(newCourses) {
+    syncSchedulesFromState(); // active tab's courses are current in state.schedules
+
+    let totalLost = 0;
+    const entries = [];
+    state.schedules.forEach(tab => {
+        const { matched, lost } = rematchTabCourses([...tab.courses], newCourses);
+        tab.courses = matched;
+        if (lost.length) {
+            totalLost += lost.length;
+            entries.push({ tabId: tab.id, tabName: tab.name, matchedCount: matched.length, lost });
+        }
+    });
+
+    state.selectedCourses = [...(getActiveSchedule()?.courses || [])];
+
+    if (entries.length) openDatasetReportModal(entries);
+    return totalLost;
+}
+
+// ── Dataset report modal (per-tab: matched count + lost courses + options) ──
+
+let datasetReportEntries = null;  // per-tab groups (for structure)
+let datasetReportIndex = [];      // flat idx -> { tabId, item } (for applying choices)
+
+function openDatasetReportModal(entries) {
+    datasetReportEntries = entries;
+    datasetReportIndex = [];
+    const totalLost = entries.reduce((s, e) => s + e.lost.length, 0);
+    elements.datasetReportTitle.textContent =
+        `بررسی دروس تطبیق‌نخورده (${toPersianNumber(totalLost)} درس)`;
+
+    elements.datasetReportBody.innerHTML = entries.map(entry => `
+        <div class="dr-tab-block">
+            <div class="dr-tab-title">${escapeHtml(entry.tabName)}
+                <span class="dr-tab-meta">${toPersianNumber(entry.matchedCount)} درس تطبیق خورد · ${toPersianNumber(entry.lost.length)} درس نیاز به بررسی دارد</span>
+            </div>
+            ${entry.lost.map(item => {
+                const myIdx = datasetReportIndex.length;
+                datasetReportIndex.push({ tabId: entry.tabId, item });
+                const optionsHtml = item.options.length
+                    ? `<div class="dr-options">` +
+                      `<label class="dr-option dr-option-drop">
+                          <input type="radio" name="dr-${myIdx}" value="">
+                          <span class="dr-option-main">نگه نداشتن — از برنامه حذف شود</span>
+                      </label>` +
+                      item.options.map((opt, oi) => `
+                      <label class="dr-option">
+                          <input type="radio" name="dr-${myIdx}" value="${escapeHtml(opt.id)}" ${oi === 0 ? 'checked' : ''}>
+                          <span class="dr-option-main">
+                              <b>گروه ${toPersianNumber(opt.group)}</b> — ${escapeHtml(opt.professor)} · ${formatUnits(opt.units)} واحد
+                          </span>
+                          <span class="dr-option-sched">${escapeHtml(slotsSummaryLine(opt.schedule))}</span>
+                      </label>`).join('') +
+                      `</div>`
+                    : `<div class="dr-no-options">در دیتای جدید هیچ گروهی از این درس (کد ${toPersianNumber(item.code)}) پیدا نشد — از برنامه حذف می‌شود.</div>`;
+                return `
+                <div class="dr-lost-item" data-lost-idx="${myIdx}">
+                    <div class="dr-lost-head">
+                        <span class="dr-lost-name">${escapeHtml(item.name)}</span>
+                        <span class="dr-lost-meta">کد ${toPersianNumber(item.code)} · گروه ${toPersianNumber(item.oldGroup)}${item.oldProfessor ? ` · ${escapeHtml(item.oldProfessor)}` : ''}</span>
+                    </div>
+                    ${optionsHtml}
+                </div>`;
+            }).join('')}
+        </div>`).join('');
+
+    elements.datasetReportModal.classList.add('active');
+}
+
+/** Apply the picked replacement options back onto their tabs */
+function applyDatasetReportChoices() {
+    if (!datasetReportEntries) {
+        closeAllModals();
+        return;
+    }
+
+    let appliedCount = 0;
+    elements.datasetReportBody.querySelectorAll('.dr-lost-item').forEach(itemEl => {
+        const idx = parseInt(itemEl.dataset.lostIdx, 10);
+        const ref = datasetReportIndex[idx];
+        if (!ref) return;
+        const tab = state.schedules.find(t => t.id === ref.tabId);
+        if (!tab) return;
+        const checked = itemEl.querySelector('input[type="radio"]:checked');
+        if (checked && checked.value && !tab.courses.includes(checked.value)) {
+            tab.courses.push(checked.value);
+            appliedCount += 1;
+        }
+    });
+
+    const activeTab = getActiveSchedule();
+    if (activeTab) state.selectedCourses = [...activeTab.courses];
+
+    datasetReportEntries = null;
+    datasetReportIndex = [];
+    state.unitsWarned = false;
+    saveSchedules();
+    updateSummary();
+    updateUnitsFlag();
+    refreshLists();
+    renderSchedule();
+    renderScheduleTabs();
+    closeAllModals();
+    showToast(appliedCount
+        ? `${toPersianNumber(appliedCount)} درس با گروه‌های جدید جایگزین شد`
+        : 'فقط دروس تطبیق‌خورده نگه داشته شدند',
+        'success');
+}
+
 function applyCustomData(text, { silent = false } = {}) {
     const courses = parseCourses(text);
     if (!courses.length) {
@@ -2666,13 +3282,16 @@ function applyCustomData(text, { silent = false } = {}) {
         return false;
     }
 
+    // Re-match the current selection against the NEW dataset BEFORE swapping
+    // it in (old course objects are still reachable for names/metadata)
+    const totalLost = rematchAllTabsAgainstDataset(courses);
+
     state.customCourses = courses;
     state.customActive = true;
     saveCustomData(text);
 
-    // Dataset replaced: wipe all previous selections so the schedule starts clean
-    state.selectedCourses = [];
     saveSchedules();
+    updateUnitsFlag();
     state.unitsWarned = false;
 
     updateSummary();
@@ -2681,19 +3300,27 @@ function applyCustomData(text, { silent = false } = {}) {
     refreshLists();
     renderSchedule();
 
-    if (!silent) showToast(`دیتای دلخواه بارگذاری شد (${toPersianNumber(courses.length)} درس)`, 'success');
+    if (!silent) {
+        showToast(totalLost
+            ? `دیتای دلخواه بارگذاری شد (${toPersianNumber(courses.length)} درس) — ${toPersianNumber(totalLost)} درس برنامه‌ها تطبیق نخورد؛ بررسی کنید`
+            : `دیتای دلخواه بارگذاری شد (${toPersianNumber(courses.length)} درس) — همه دروس برنامه‌ها تطبیق خوردند`,
+            totalLost ? 'warning' : 'success');
+    }
     return true;
 }
 
 function restoreDefaultData() {
+    // Re-match tabs against the DEFAULT dataset before leaving custom mode
+    const totalLost = state.defaultCourses.length
+        ? rematchAllTabsAgainstDataset(state.defaultCourses)
+        : 0;
+
     state.customCourses = [];
     state.customActive = false;
     clearCustomData();
 
-    // Dataset replaced: wipe all selections so the schedule starts clean,
-    // same as applyCustomData — stale default selections must not survive
-    state.selectedCourses = [];
     saveSchedules();
+    updateUnitsFlag();
     state.unitsWarned = false;
 
     updateSummary();
@@ -2701,7 +3328,12 @@ function restoreDefaultData() {
     rebuildFilterBars();
     refreshLists();
     renderSchedule();
-    showToast('به دیتای پیش‌فرض بازگشتید', 'info');
+
+    if (totalLost) {
+        showToast(`به دیتای پیش‌فرض بازگشتید — ${toPersianNumber(totalLost)} درس تطبیق نخورد؛ بررسی کنید`, 'warning');
+    } else {
+        showToast('به دیتای پیش‌فرض بازگشتید', 'info');
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2838,14 +3470,18 @@ async function copyToClipboard() {
 // SHARE VIA LINK (URL hash)
 // ═══════════════════════════════════════════════════════════════
 
-/** Encode selected course IDs into the URL hash (shareable link) */
+/** Encode selected course IDs (+ this tab's validation overrides) into the URL hash */
 function buildShareLink() {
-    const payload = JSON.stringify({ c: state.selectedCourses });
+    const payload = JSON.stringify({
+        c: state.selectedCourses,
+        v: getValidationOverrides() // rule switches ride along the link
+    });
     const encoded = btoa(unescape(encodeURIComponent(payload))); // UTF-8 safe base64
     return `${location.origin}${location.pathname}#${encoded}`;
 }
 
-/** Copy a share link (URL #hash with selected course IDs) to the clipboard */
+/** Copy a share link (URL #hash with selected course IDs) to the clipboard.
+ *  Always copies directly — no navigator.share sheet / new window. */
 async function shareSchedule() {
     if (state.selectedCourses.length === 0) {
         showToast('برنامه خالی است', 'warning');
@@ -2854,26 +3490,15 @@ async function shareSchedule() {
 
     const link = buildShareLink();
     try {
-        if (navigator.share) {
-            // Mobile: native share sheet (can also send the link via apps)
-            await navigator.share({ title: 'برنامه هفتگی من', url: link });
-            return;
-        }
         await navigator.clipboard.writeText(link);
         showToast('لینک برنامه کپی شد', 'success');
     } catch (error) {
-        if (error && error.name === 'AbortError') return; // user closed share sheet
-        try {
-            await navigator.clipboard.writeText(link);
-            showToast('لینک برنامه کپی شد', 'success');
-        } catch (e) {
-            console.error('Error sharing link:', e);
-            showToast('خطا در ساخت لینک', 'error');
-        }
+        console.error('Error sharing link:', error);
+        showToast('خطا در کپی لینک — دستی کپی کنید', 'error');
     }
 }
 
-/** Parsed ids from a share link kept for the landing modal */
+/** Parsed ids (+ validation overrides) from a share link kept for the landing modal */
 let pendingShareIds = null;
 
 /** Restore selections from a share link's #hash (returns true when applied) */
@@ -2886,6 +3511,16 @@ function restoreFromHash() {
         if (!valid.length) return false;
 
         pendingShareIds = valid;
+        // Validation switches shared with the link (only the rules the sender turned OFF)
+        if (payload.v && typeof payload.v === 'object') {
+            const off = {};
+            Object.keys(DEFAULT_VALIDATIONS).forEach(key => {
+                if (payload.v[key] === false) off[key] = false;
+            });
+            state.pendingShareValidations = Object.keys(off).length ? off : null;
+        } else {
+            state.pendingShareValidations = null;
+        }
         // Strip the hash so a refresh doesn't re-import the shared list
         history.replaceState(null, '', location.pathname + location.search);
         return true;
@@ -2944,6 +3579,7 @@ function applyShareLanding() {
         syncSchedulesFromState();
         state.activeScheduleId = id;
         state.selectedCourses = [...pendingShareIds];
+        applyValidationsToTab(id, state.pendingShareValidations); // rule switches stick to the tab
         showToast(`"${tab.name}" ساخته شد و برنامه اشتراکی داخل آن ریخته شد`, 'success');
     } else {
         const tab = state.schedules.find(t => t.id === value);
@@ -2952,6 +3588,7 @@ function applyShareLanding() {
         syncSchedulesFromState();
         state.activeScheduleId = tab.id;
         state.selectedCourses = [...pendingShareIds];
+        applyValidationsToTab(tab.id, state.pendingShareValidations); // rule switches stick to the tab
         showToast(
             replaced
                 ? `برنامه "${tab.name}" با ${toPersianNumber(pendingShareIds.length)} درس اشتراکی جایگزین شد`
@@ -2961,9 +3598,11 @@ function applyShareLanding() {
     }
 
     pendingShareIds = null;
+    state.pendingShareValidations = null;
     state.unitsWarned = false;
     saveSchedules();
     updateSummary();
+    updateUnitsFlag();
     refreshLists();
     renderSchedule();
     renderScheduleTabs();
@@ -2975,7 +3614,13 @@ function applyShareLanding() {
 async function exportPendingShare(kind) {
     if (!pendingShareIds) return;
     const savedIds = [...state.selectedCourses];
+    const hadOverrides = !!getActiveSchedule()?.validationOverrides;
+    const savedValidations = getValidationOverrides();
     state.selectedCourses = [...pendingShareIds];
+    if (state.pendingShareValidations) {
+        const tab = getActiveSchedule();
+        if (tab) tab.validationOverrides = { ...DEFAULT_VALIDATIONS, ...state.pendingShareValidations };
+    }
     try {
         if (kind === 'share') {
             await shareSchedule(); // builds the link from the shared ids
@@ -2996,6 +3641,11 @@ async function exportPendingShare(kind) {
         }
     } finally {
         state.selectedCourses = savedIds;
+        const tab = getActiveSchedule();
+        if (tab) {
+            if (hadOverrides) tab.validationOverrides = savedValidations;
+            else delete tab.validationOverrides;
+        }
     }
 }
 
@@ -3029,7 +3679,7 @@ function slotToExport(slot) {
 
 /** JSON of the current selection in the shareable format */
 function buildExportJson() {
-    return {
+    const out = {
         format: SCHEDULE_IO_FORMAT,
         version: SCHEDULE_IO_VERSION,
         courses: state.selectedCourses
@@ -3044,6 +3694,9 @@ function buildExportJson() {
                 schedule: c.schedule.map(slotToExport)
             }))
     };
+    // Validation switches ride along so they survive import elsewhere
+    out.validations = getValidationOverrides();
+    return out;
 }
 
 /** Refresh the export textarea from the current selection */
@@ -3064,6 +3717,9 @@ function downloadIo() {
 }
 
 // ── Import: normalization + resolution against the live dataset ──
+
+/** Validation switches carried by the JSON being imported (OFF rules only) */
+let ioImportValidations = null;
 
 /** Normalize slot fields; invalid slot -> null.
  *  Accepts {day,start,end,parity?} objects or raw portal strings like
@@ -3178,6 +3834,7 @@ function resolveIoEntry(entry) {
 /** Parse + normalize pasted text into a preview model */
 function validateIoText(text) {
     ioLastModel = null;
+    ioImportValidations = null;
     elements.ioPreview.innerHTML = '';
     elements.ioImportFooter.hidden = true;
 
@@ -3216,6 +3873,17 @@ function validateIoText(text) {
     if (!Array.isArray(payload.courses) || payload.courses.length === 0) {
         renderIoError('لیست دروس خالی است ("courses" باید آرایه دروس باشد).');
         return;
+    }
+
+    // Validation switches carried by the file (only the rules switched OFF matter)
+    if (payload.validations && typeof payload.validations === 'object') {
+        const off = {};
+        Object.keys(DEFAULT_VALIDATIONS).forEach(key => {
+            if (payload.validations[key] === false) off[key] = false;
+        });
+        ioImportValidations = Object.keys(off).length ? off : null;
+    } else {
+        ioImportValidations = null;
     }
 
     // Normalize + dedupe: same code twice in one file → keep the first
@@ -3294,6 +3962,15 @@ function renderIoPreview(model) {
     if (!elements.ioModeReplace.checked && !elements.ioModeAdd.checked) elements.ioModeAdd.checked = true;
 
     let html = '';
+
+    if (ioImportValidations) {
+        const offNames = Object.keys(ioImportValidations)
+            .map(k => VALIDATION_LABELS[k]).filter(Boolean)
+            .map(escapeHtml).join('، ');
+        if (offNames) {
+            html += `<p class="io-note io-note-validations">⚙️ ولیدیشن‌های خاموش در این فایل: ${offNames} — با اعمال برنامه روی همین تب فعال می‌شوند.</p>`;
+        }
+    }
 
     if (duplicates && duplicates.length) {
         html += `<p class="io-note">تکراری نادیده گرفته شد: ${duplicates.map(escapeHtml).join('، ')}</p>`;
@@ -3469,14 +4146,19 @@ function applyIoImport() {
 
     state.selectedCourses = target.map(getCourseId);
 
+    // Validation switches from the file stick to this tab
+    if (ioImportValidations) applyValidationsToTab(state.activeScheduleId, ioImportValidations);
+
     saveSchedules(); // keeps the active tab + mirror key in sync
     state.unitsWarned = false;
     updateSummary();
+    updateUnitsFlag();
     refreshLists();
     renderSchedule();
     renderScheduleTabs(); // tab count badges may change
     closeAllModals();
     ioLastModel = null;
+    ioImportValidations = null;
 
     showToast(
         mode === 'replace'
@@ -3644,15 +4326,24 @@ function aiPlanReps(pool) {
     });
 }
 
+/** Representative course per code for AI-planner lists: prefer a group with
+ *  free seats so the picker never surfaces only a full group */
+function aiPlanRepresentative(code) {
+    const variants = getListCourses().filter(c => c.code === code);
+    return variants.find(c => c.capacity === 0 || c.registered < c.capacity) || variants[0];
+}
+
 /** Courses offered for the passed-marker search (hide already-marked) */
 function aiPassedCandidates(query) {
-    const q = query.trim().toLowerCase();
+    const q = normalizedFaText(query.trim().toLowerCase());
     const passedSet = new Set(aiPlanState.passed);
     return aiPlanReps(getListCourses()).filter(c => {
         if (passedSet.has(c.code)) return false;
         if (!q) return true;
         return c.name.toLowerCase().includes(q) ||
+               normalizedFaText(c.name).toLowerCase().includes(q) ||
                c.professor.toLowerCase().includes(q) ||
+               normalizedFaText(c.professor).toLowerCase().includes(q) ||
                c.code.includes(q);
     }).slice(0, 12);
 }
@@ -3661,7 +4352,7 @@ function renderAiPassedChips() {
     const wrap = elements.aiPassedChips;
     if (!wrap) return;
     const reps = aiPlanState.passed
-        .map(code => getListCourses().find(c => c.code === code))
+        .map(code => aiPlanRepresentative(code))
         .filter(Boolean);
     wrap.innerHTML = reps.map(c => `
         <span class="combo-chip">
@@ -4225,6 +4916,23 @@ function setupEventListeners() {
     // AI planner (برنامه‌ریزی با هوش مصنوعی)
     setupAiPlanFeature();
 
+    // Validation settings (تنظیمات ولیدیشن)
+    setupValidationSettings();
+
+    // Dataset report modal (گزارش تطبیق دیتا)
+    elements.btnDatasetReportApply.addEventListener('click', applyDatasetReportChoices);
+    elements.btnDatasetReportCancel.addEventListener('click', () => {
+        datasetReportEntries = null;
+        datasetReportIndex = [];
+        closeAllModals();
+        showToast('دروس تطبیق‌نخورده از برنامه‌ها حذف شدند', 'info');
+    });
+    elements.closeDatasetReport.addEventListener('click', () => {
+        datasetReportEntries = null;
+        datasetReportIndex = [];
+        closeAllModals();
+    });
+
     // Mobile dock menu
     setupDockMenu();
 }
@@ -4283,6 +4991,12 @@ async function init() {
         loadFromStorage(); // no share link → load saved selections
     }
     syncSchedulesFromState();
+
+    // "Future tabs" validation defaults: restore the saved override set
+    try {
+        const futureSaved = JSON.parse(localStorage.getItem(CONFIG.FUTURE_VALIDATIONS_KEY) || 'null');
+        if (futureSaved && typeof futureSaved === 'object') state.futureValidationOverrides = futureSaved;
+    } catch (e) { state.futureValidationOverrides = null; }
 
     updateSummary();
     updateCustomDataStatus();
