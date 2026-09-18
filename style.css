@@ -36,19 +36,38 @@
     --space-12: 3rem;
 
     /* Border Radius */
-    --radius-sm: 4px;
-    --radius-md: 8px;
-    --radius-lg: 12px;
-    --radius-xl: 16px;
+    --radius-xs: 4px;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --radius-xl: 18px;
 
-    /* Transitions */
-    --transition-fast: 150ms ease;
-    --transition-base: 250ms ease;
-    --transition-slow: 350ms ease;
+    /* ── Motion tokens (Emil Kowalski design-engineering) ─────
+       Enter/move = strong ease-out (feels responsive).
+       Modals/drawers = iOS-like drawer curve.
+       UI animations stay under 300ms. Custom curves, never raw `ease`. */
+    --ease-out-ui: cubic-bezier(0.23, 1, 0.32, 1);
+    --ease-inout-ui: cubic-bezier(0.77, 0, 0.175, 1);
+    --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
 
-    /* Shadows - Neobrutalism Style */
-    --shadow-hard: 4px 4px 0px 0px;
-    --shadow-hard-lg: 6px 6px 0px 0px;
+    /* Pure durations — curves are applied at use sites (a var containing
+       "time curve" silently invalidates the whole transition shorthand) */
+    --transition-fast: 160ms;
+    --transition-base: 250ms;
+    --transition-slow: 350ms;
+    --interactive-dur: 160ms;
+    --ease-interactive: cubic-bezier(0.23, 1, 0.32, 1);
+    /* Modal timing split: duration token + curve token, so transition
+       shorthands parse (a var with "300ms cubic-bezier(...)" inline breaks them) */
+    --modal-dur: 300ms;
+    --modal-dur-fast: 220ms;
+    --ease-modal: cubic-bezier(0.32, 0.72, 0, 1);
+
+    /* Shadows - soft, monochrome (replaces neobrutalism hard offsets) */
+    --shadow-rest: 0 1px 2px rgba(0, 0, 0, 0.28), 0 4px 16px rgba(0, 0, 0, 0.16);
+    --shadow-lift: 0 2px 4px rgba(0, 0, 0, 0.28), 0 12px 32px rgba(0, 0, 0, 0.24);
+    --shadow-hard: 0 1px 2px rgba(0, 0, 0, 0.28);
+    --shadow-hard-lg: 0 12px 32px rgba(0, 0, 0, 0.24);
 
     /* Z-Index Scale */
     --z-dropdown: 100;
@@ -84,11 +103,38 @@
     --accent-primary: #ffffff;
     --accent-secondary: #e0e0e0;
 
-    /* Status Colors */
-    --success: #22c55e;
-    --warning: #f59e0b;
-    --danger: #ef4444;
-    --info: #3b82f6;
+    /* Status Colors — reserved for ATTENTION only (chrome stays gray):
+       danger red for conflicts/over-limit/full/errors, green for success,
+       amber for warnings. UI surfaces, borders and text remain neutral. */
+    --success: #4ade80;
+    --success-contrast: #052e12;
+    --warning: #fbbf24;
+    --danger: #f87171;
+    --danger-contrast: #0a0a0a;
+    --info: #93a3b8;
+    --danger-tint: rgba(248, 113, 113, 0.12);
+    --success-tint: rgba(74, 222, 128, 0.12);
+    --warning-tint: rgba(251, 191, 36, 0.12);
+
+    /* Interaction surfaces */
+    --tint: rgba(255, 255, 255, 0.06);
+    --tint-strong: rgba(255, 255, 255, 0.11);
+    --glass-header: rgba(10, 10, 10, 0.82);
+    --overlay-veil: rgba(0, 0, 0, 0.72);
+
+    /* Schedule blocks: light-gray chips with dark ink, both themes */
+    --block-ink: #0a0a0a;
+    --block-ink-soft: rgba(0, 0, 0, 0.58);
+    --block-ink-faint: rgba(0, 0, 0, 0.42);
+
+    /* Active tab: inverted chip */
+    --tab-active-bg: #f5f5f5;
+    --tab-active-fg: #0a0a0a;
+
+    /* Over-limit / conflict emphasis (black-fill inversion) */
+    --alert-bg: #0a0a0a;
+    --alert-fg: #fafafa;
+    --alert-border: #ffffff;
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -118,11 +164,36 @@
     --accent-primary: #0a0a0a;
     --accent-secondary: #2a2a2a;
 
-    /* Status Colors */
+    /* Status Colors — attention signals (light mode) */
     --success: #16a34a;
+    --success-contrast: #ffffff;
     --warning: #d97706;
     --danger: #dc2626;
-    --info: #2563eb;
+    --danger-contrast: #ffffff;
+    --info: #64748b;
+    --danger-tint: rgba(220, 38, 38, 0.09);
+    --success-tint: rgba(22, 163, 74, 0.1);
+    --warning-tint: rgba(217, 119, 6, 0.1);
+
+    /* Interaction surfaces */
+    --tint: rgba(0, 0, 0, 0.05);
+    --tint-strong: rgba(0, 0, 0, 0.09);
+    --glass-header: rgba(255, 255, 255, 0.82);
+    --overlay-veil: rgba(0, 0, 0, 0.5);
+
+    /* Schedule blocks: light-gray chips with dark ink, both themes */
+    --block-ink: #0a0a0a;
+    --block-ink-soft: rgba(0, 0, 0, 0.58);
+    --block-ink-faint: rgba(0, 0, 0, 0.42);
+
+    /* Active tab: inverted chip */
+    --tab-active-bg: #171717;
+    --tab-active-fg: #fafafa;
+
+    /* Over-limit / conflict emphasis */
+    --alert-bg: #0a0a0a;
+    --alert-fg: #fafafa;
+    --alert-border: #0a0a0a;
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -134,6 +205,30 @@
     margin: 0;
     padding: 0;
 }
+
+/* ── Page-load entrance: staggered rise (30–60ms between items) ──
+   Applies once via .boot on <body>; decorative, never blocks input. */
+@keyframes rise-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.boot .app-header {
+    animation: rise-in 450ms var(--ease-out-ui) both;
+}
+
+.boot .summary-controls,
+.boot .workspace > * {
+    opacity: 0;
+    animation: rise-in 450ms var(--ease-out-ui) forwards;
+}
+
+.boot .summary-controls { animation-delay: 90ms; }
+.boot .workspace > *:nth-child(1) { animation-delay: 160ms; }
+.boot .workspace > *:nth-child(2) { animation-delay: 220ms; }
+.boot .workspace > *:nth-child(3) { animation-delay: 280ms; }
+
+.boot .app-footer { animation: rise-in 450ms var(--ease-out-ui) 340ms both; }
 
 html {
     font-size: 16px;
@@ -153,7 +248,7 @@ body {
     direction: rtl;
     display: flex;
     flex-direction: column;
-    transition: background-color var(--transition-base), color var(--transition-base);
+    transition: background-color 220ms ease, color 220ms ease;
 }
 
 body.modal-open {
@@ -178,7 +273,7 @@ body.modal-open {
 
 ::-webkit-scrollbar-thumb {
     background: var(--border-secondary);
-    border-radius: var(--radius-sm);
+    border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -199,9 +294,11 @@ body.modal-open {
     position: sticky;
     top: 0;
     z-index: var(--z-sticky);
-    background-color: var(--bg-secondary);
-    border-bottom: 2px solid var(--border-primary);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    background-color: var(--glass-header);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border-primary);
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.2);
 }
 
 .header-content {
@@ -227,9 +324,16 @@ body.modal-open {
     align-items: center;
     justify-content: center;
     background-color: var(--bg-tertiary);
-    border: 2px solid var(--border-secondary);
+    border: 1px solid var(--border-secondary);
     border-radius: var(--radius-md);
     color: var(--text-primary);
+    transition: transform 300ms var(--ease-out-ui);
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .logo-icon:hover {
+        transform: rotate(-6deg) scale(1.05);
+    }
 }
 
 .logo-icon svg {
@@ -250,15 +354,62 @@ body.modal-open {
     gap: var(--space-4);
 }
 
+/* Frozen selection stats, living inside the glass header.
+   Mobile: full-width centered pill row under the logo row.
+   Desktop: inline pills between the logo and the actions. */
+.header-stats {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-4);
+    padding: var(--space-1) var(--space-4);
+    background-color: var(--tint);
+    border: 1px solid var(--border-primary);
+    border-radius: 999px;
+}
+
+@media (max-width: 1023px) {
+    .header-content {
+        flex-wrap: wrap;
+    }
+
+    .header-stats {
+        order: 3;
+        flex: 1 1 100%;
+        gap: var(--space-3);
+        padding: 2px var(--space-3);
+        margin-top: var(--space-1);
+    }
+
+    .header-stats .summary-label {
+        font-size: 10.5px;
+    }
+
+    .header-stats .summary-value {
+        font-size: 12px;
+        min-width: 18px;
+    }
+}
+
+.header-stats .summary-label {
+    font-size: 11.5px;
+    color: var(--text-tertiary);
+}
+
+.header-stats .summary-value {
+    font-size: 13px;
+    min-width: 24px;
+}
+
 /* Last data update label */
 .data-update {
     display: flex;
     align-items: center;
     gap: var(--space-2);
     padding: var(--space-2) var(--space-4);
-    background-color: var(--bg-tertiary);
-    border: 2px solid var(--border-primary);
-    border-radius: var(--radius-md);
+    background-color: var(--tint);
+    border: 1px solid var(--border-primary);
+    border-radius: 999px;
     font-size: var(--font-size-sm);
 }
 
@@ -266,7 +417,7 @@ body.modal-open {
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background-color: var(--success);
+    background-color: var(--text-primary);
     flex-shrink: 0;
     animation: pulse 2s ease infinite;
 }
@@ -293,23 +444,24 @@ body.modal-open {
     display: flex;
     align-items: center;
     justify-content: center;
-    background-color: var(--bg-tertiary);
-    border: 2px solid var(--border-secondary);
+    background-color: var(--tint);
+    border: 1px solid var(--border-secondary);
     border-radius: var(--radius-md);
     color: var(--text-primary);
     cursor: pointer;
-    transition: all var(--transition-fast);
+    transition: transform var(--interactive-dur) var(--ease-interactive), border-color var(--interactive-dur) var(--ease-interactive), background-color var(--interactive-dur) var(--ease-interactive);
     flex-shrink: 0;
 }
 
 .theme-toggle:hover {
-    background-color: var(--bg-hover);
+    background-color: var(--tint-strong);
     border-color: var(--border-focus);
     transform: translateY(-1px);
 }
 
 .theme-toggle:active {
-    transform: translateY(0);
+    transform: scale(0.92);
+    transition-duration: 80ms;
 }
 
 .theme-toggle svg {
@@ -321,6 +473,17 @@ body.modal-open {
 .dark-mode .moon-icon { display: none; }
 .light-mode .sun-icon { display: none; }
 .light-mode .moon-icon { display: block; }
+
+/* Sun/moon morph on theme change: crossfade with a touch of blur
+   to blend the two states into one seamless swap */
+.theme-toggle svg {
+    grid-area: 1 / 1;
+    transition: opacity 240ms ease, filter 240ms ease, transform 240ms var(--ease-drawer);
+}
+.dark-mode .sun-icon { transform: rotate(0deg) scale(1); }
+.dark-mode .moon-icon { transform: rotate(-90deg) scale(0.6); filter: blur(2px); }
+.light-mode .sun-icon { transform: rotate(90deg) scale(0.6); filter: blur(2px); }
+.light-mode .moon-icon { transform: rotate(0deg) scale(1); }
 
 /* ─────────────────────────────────────────────────────────────
    MAIN CONTAINER
@@ -346,10 +509,11 @@ body.modal-open {
     align-items: center;
     gap: var(--space-3);
     padding: var(--space-3) var(--space-5);
-    background-color: rgba(245, 158, 11, 0.1);
-    border: 2px solid var(--warning);
+    background-color: var(--tint);
+    border: 1px solid var(--border-primary);
+    border-inline-start: 3px solid var(--text-primary);
     border-radius: var(--radius-md);
-    color: var(--warning);
+    color: var(--text-primary);
     font-size: var(--font-size-sm);
     font-weight: var(--font-semibold);
 }
@@ -366,21 +530,25 @@ body.modal-open {
     gap: var(--space-2);
     margin-inline-start: auto;
     padding: var(--space-1) var(--space-3);
-    background-color: var(--warning);
+    background-color: var(--text-primary);
     border: none;
-    border-radius: var(--radius-md);
-    color: #0a0a0a;
+    border-radius: 999px;
+    color: var(--bg-primary);
     font-family: inherit;
     font-size: var(--font-size-xs);
     font-weight: var(--font-bold);
     cursor: pointer;
     white-space: nowrap;
     flex-shrink: 0;
-    transition: filter var(--transition-fast);
+    transition: transform var(--interactive-dur) var(--ease-interactive), filter var(--interactive-dur) var(--ease-interactive);
 }
 
 .custom-data-banner .banner-reset-btn:hover {
-    filter: brightness(1.1);
+    filter: brightness(1.15);
+}
+
+.custom-data-banner .banner-reset-btn:active {
+    transform: scale(0.96);
 }
 
 .custom-data-banner .banner-reset-btn svg {
@@ -410,10 +578,14 @@ body.modal-open {
     color: var(--text-tertiary);
     text-align: right;
     background-color: var(--bg-secondary);
-    border: 2px solid var(--border-primary);
+    border: 1px solid var(--border-primary);
     border-radius: var(--radius-md);
     cursor: pointer;
-    transition: all var(--transition-base);
+    transition: border-color var(--interactive-dur) var(--ease-interactive), color var(--interactive-dur) var(--ease-interactive), background-color var(--interactive-dur) var(--ease-interactive), transform var(--interactive-dur) var(--ease-interactive);
+}
+
+.search-trigger:active {
+    transform: scale(0.995);
 }
 
 .search-trigger .search-icon {
@@ -436,9 +608,9 @@ body.modal-open {
     font-size: var(--font-size-xs);
     font-weight: var(--font-semibold);
     color: var(--text-secondary);
-    background-color: var(--bg-tertiary);
-    border: 1.5px solid var(--border-primary);
-    border-radius: var(--radius-md);
+    background-color: var(--tint);
+    border: 1px solid var(--border-primary);
+    border-radius: 999px;
     padding: 2px var(--space-2);
     white-space: nowrap;
 }
@@ -471,16 +643,23 @@ body.modal-open {
     width: 100%;
     height: 88vh;
     background-color: var(--bg-secondary);
-    border-top: 2px solid var(--border-primary);
+    border-top: 1px solid var(--border-primary);
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     box-shadow: 0 -6px 0 0 rgba(0, 0, 0, 0.3);
     overflow: hidden;
+    /* Exit: slide back down quickly with ease-out (moves immediately) */
     transform: translateY(24px);
-    transition: transform var(--transition-base) cubic-bezier(0.16, 1, 0.3, 1);
+    transition: transform 200ms cubic-bezier(0.23, 1, 0.32, 1),
+                opacity 200ms cubic-bezier(0.23, 1, 0.32, 1);
+    opacity: 0;
 }
 
 .modal-overlay.active .search-modal {
+    /* Enter: slide up full duration */
     transform: translateY(0);
+    opacity: 1;
+    transition: transform var(--modal-dur) var(--ease-drawer),
+                opacity var(--modal-dur) var(--ease-drawer);
 }
 
 .search-modal-header {
@@ -488,7 +667,7 @@ body.modal-open {
     align-items: center;
     gap: var(--space-2);
     padding: var(--space-3);
-    border-bottom: 2px solid var(--border-primary);
+    border-bottom: 1px solid var(--border-primary);
     background-color: var(--bg-tertiary);
 }
 
@@ -505,10 +684,10 @@ body.modal-open {
     flex-shrink: 0;
     color: var(--text-secondary);
     background-color: var(--bg-secondary);
-    border: 1.5px solid var(--border-secondary);
+    border: 1px solid var(--border-secondary);
     border-radius: var(--radius-md);
     cursor: pointer;
-    transition: all var(--transition-fast);
+    transition: transform var(--interactive-dur) var(--ease-interactive), border-color var(--interactive-dur) var(--ease-interactive), background-color var(--interactive-dur) var(--ease-interactive), color var(--interactive-dur) var(--ease-interactive), box-shadow var(--interactive-dur) var(--ease-interactive);
 }
 
 .search-modal-close svg {
@@ -517,15 +696,16 @@ body.modal-open {
 }
 
 .search-modal-close:hover {
-    color: #fff;
+    color: var(--danger-contrast);
     background-color: var(--danger);
     border-color: var(--danger);
 }
 
 .search-modal .filter-bar {
-    border-bottom: 2px solid var(--border-primary);
-    max-height: 38vh;
+    border-bottom: 1px solid var(--border-primary);
+    max-height: 62vh;
     overflow-y: auto;
+    overscroll-behavior: contain;
 }
 
 .search-modal .search-results {
@@ -564,9 +744,9 @@ body.modal-open {
     font-weight: var(--font-medium);
     color: var(--text-primary);
     background-color: var(--bg-secondary);
-    border: 2px solid var(--border-primary);
+    border: 1px solid var(--border-primary);
     border-radius: var(--radius-lg);
-    transition: all var(--transition-base);
+    transition: transform var(--interactive-dur) var(--ease-interactive), border-color var(--interactive-dur) var(--ease-interactive), background-color var(--interactive-dur) var(--ease-interactive), color var(--interactive-dur) var(--ease-interactive), box-shadow var(--interactive-dur) var(--ease-interactive);
 }
 
 .search-input::placeholder {
@@ -580,7 +760,7 @@ body.modal-open {
 .search-input:focus {
     border-color: var(--text-primary);
     background-color: var(--bg-tertiary);
-    box-shadow: var(--shadow-hard) var(--border-primary);
+    box-shadow: var(--shadow-rest);
 }
 
 .search-clear {
@@ -592,13 +772,13 @@ body.modal-open {
     align-items: center;
     justify-content: center;
     background-color: var(--bg-tertiary);
-    border: 1.5px solid var(--border-secondary);
+    border: 1px solid var(--border-secondary);
     border-radius: var(--radius-sm);
     color: var(--text-secondary);
     cursor: pointer;
     opacity: 0;
     visibility: hidden;
-    transition: all var(--transition-fast);
+    transition: transform var(--interactive-dur) var(--ease-interactive), border-color var(--interactive-dur) var(--ease-interactive), background-color var(--interactive-dur) var(--ease-interactive), color var(--interactive-dur) var(--ease-interactive), box-shadow var(--interactive-dur) var(--ease-interactive);
 }
 
 .search-clear.visible {
@@ -609,7 +789,7 @@ body.modal-open {
 .search-clear:hover {
     background-color: var(--danger);
     border-color: var(--danger);
-    color: white;
+    color: var(--danger-contrast);
 }
 
 .search-clear svg {
@@ -646,21 +826,40 @@ body.modal-open {
 .course-result {
     padding: var(--space-4);
     margin-bottom: var(--space-2);
-    background-color: var(--bg-tertiary);
-    border: 2px solid var(--border-primary);
+    background-color: var(--tint);
+    border: 1px solid var(--border-primary);
+    border-inline-start: 3px solid var(--course-accent, var(--border-focus));
     border-radius: var(--radius-md);
     cursor: pointer;
-    transition: all var(--transition-fast);
+    transition: transform var(--interactive-dur) var(--ease-interactive), border-color var(--interactive-dur) var(--ease-interactive), background-color var(--interactive-dur) var(--ease-interactive), box-shadow var(--interactive-dur) var(--ease-interactive);
+}
+
+/* Identity dot next to the course name — matches its schedule blocks */
+.course-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    margin-inline-end: 2px;
+    border-radius: 50%;
+    background-color: var(--course-accent, var(--border-focus));
+    vertical-align: middle;
+}
+
+.course-result.selected-card {
+    border-color: var(--course-accent, var(--border-focus));
+    box-shadow: inset 0 0 0 1px var(--course-accent, var(--border-focus));
 }
 
 .course-result:last-child {
     margin-bottom: 0;
 }
 
-.course-result:hover {
-    border-color: var(--border-secondary);
-    background-color: var(--bg-hover);
-    transform: translateX(-2px);
+@media (hover: hover) and (pointer: fine) {
+    .course-result:hover {
+        border-color: var(--border-focus);
+        background-color: var(--tint-strong);
+        transform: translateX(-2px);
+    }
 }
 
 .course-result.disabled {
@@ -700,15 +899,15 @@ body.modal-open {
 }
 
 .default-badge {
-    color: var(--warning);
-    border-color: var(--warning);
-    background-color: transparent;
+    color: var(--text-secondary);
+    border-color: var(--border-focus);
+    background-color: var(--tint);
 }
 
 .full-badge {
     color: var(--danger);
     border-color: var(--danger);
-    background-color: transparent;
+    background-color: var(--danger-tint);
 }
 
 .course-result-code {
@@ -737,14 +936,18 @@ body.modal-open {
     gap: var(--space-1);
 }
 
-/* Capacity readout on course cards: green while seats remain, red when full */
+/* Capacity readout: green while seats remain, red when full */
 .course-result-meta .capacity-ok {
-    color: #4ade80;
+    color: var(--success);
+    font-weight: var(--font-semibold);
 }
 
 .course-result-meta .capacity-full {
     color: var(--danger);
-    font-weight: var(--font-semibold);
+    font-weight: var(--font-bold);
+    background-color: var(--danger-tint);
+    border-radius: var(--radius-sm);
+    padding: 0 4px;
 }
 
 .course-result-schedule {
@@ -777,10 +980,10 @@ body.modal-open {
     font-weight: var(--font-semibold);
     color: var(--bg-primary);
     background-color: var(--text-primary);
-    border: 2px solid var(--text-primary);
+    border: 1px solid var(--text-primary);
     border-radius: var(--radius-sm);
     cursor: pointer;
-    transition: all var(--transition-fast);
+    transition: transform var(--interactive-dur) var(--ease-interactive), border-color var(--interactive-dur) var(--ease-interactive), background-color var(--interactive-dur) var(--ease-interactive), color var(--interactive-dur) var(--ease-interactive), box-shadow var(--interactive-dur) var(--ease-interactive);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -803,8 +1006,9 @@ body.modal-open {
 }
 
 .btn-add-course.selected:hover {
-    border-color: var(--danger);
-    color: var(--danger);
+    border-color: var(--text-primary);
+    color: var(--text-primary);
+    filter: brightness(0.9);
 }
 
 /* Group swap: replaces the selected group with this card's group */
@@ -820,7 +1024,7 @@ body.modal-open {
     border: 2px dashed var(--info);
     border-radius: var(--radius-sm);
     cursor: pointer;
-    transition: all var(--transition-fast);
+    transition: transform var(--interactive-dur) var(--ease-interactive), border-color var(--interactive-dur) var(--ease-interactive), background-color var(--interactive-dur) var(--ease-interactive), color var(--interactive-dur) var(--ease-interactive), box-shadow var(--interactive-dur) var(--ease-interactive);
 }
 .btn-swap-group:hover {
     background-color: var(--info);
@@ -863,8 +1067,8 @@ body.modal-open {
 }
 .course-variant-full {
     font-size: var(--font-size-xs);
-    font-weight: var(--font-semibold);
-    color: var(--danger);
+    font-weight: var(--font-bold);
+    color: var(--text-primary);
     flex-shrink: 0;
 }
 /* Full-but-swappable (capacity rule OFF): informational badge next to the swap button */
@@ -936,10 +1140,10 @@ body.modal-open {
     font-weight: var(--font-semibold);
     color: var(--text-primary);
     background-color: var(--bg-secondary);
-    border: 1.5px solid var(--border-primary);
+    border: 1px solid var(--border-primary);
     border-radius: var(--radius-sm);
     cursor: pointer;
-    transition: all var(--transition-fast);
+    transition: transform var(--interactive-dur) var(--ease-interactive), border-color var(--interactive-dur) var(--ease-interactive), background-color var(--interactive-dur) var(--ease-interactive), color var(--interactive-dur) var(--ease-interactive), box-shadow var(--interactive-dur) var(--ease-interactive);
 }
 .share-export-btn:hover {
     border-color: var(--text-primary);
@@ -964,7 +1168,7 @@ body.modal-open {
     gap: var(--space-5);
     padding: var(--space-3) var(--space-5);
     background-color: var(--bg-secondary);
-    border: 2px solid var(--border-primary);
+    border: 1px solid var(--border-primary);
     border-radius: var(--radius-md);
 }
 
@@ -987,15 +1191,111 @@ body.modal-open {
     min-width: 28px;
     text-align: center;
     padding: var(--space-1) var(--space-2);
-    background-color: var(--bg-tertiary);
+    background-color: var(--tint);
     border-radius: var(--radius-sm);
-    transition: all var(--transition-fast);
+    transition: transform var(--interactive-dur) var(--ease-interactive), background-color var(--interactive-dur) var(--ease-interactive), color var(--interactive-dur) var(--ease-interactive), outline-color var(--interactive-dur) var(--ease-interactive);
+}
+
+/* Number-change feedback: JS re-triggers the pop animation on update */
+.summary-value.value-pop {
+    animation: value-pop 240ms var(--ease-drawer);
+}
+
+@keyframes value-pop {
+    0% { transform: scale(1); }
+    40% { transform: scale(1.14); }
+    100% { transform: scale(1); }
 }
 
 .summary-value.over-limit {
     color: var(--danger);
-    background-color: rgba(239, 68, 68, 0.12);
+    background-color: var(--danger-tint);
     outline: 1px solid var(--danger);
+}
+
+/* Export menu: one expandable dropdown for every output type */
+.menu-wrap {
+    position: relative;
+}
+
+.menu-pop[hidden] {
+    display: none; /* display:flex would defeat the hidden attribute */
+}
+
+.menu-pop {
+    position: absolute;
+    top: calc(100% + 6px);
+    inset-inline-start: 0;
+    min-width: 200px;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+    padding: 5px;
+    z-index: var(--z-dropdown);
+    display: flex;
+    flex-direction: column;
+    transform-origin: top;
+    animation: menu-pop-in 180ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@keyframes menu-pop-in {
+    from { opacity: 0; transform: translateY(-5px) scale(0.97); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.menu-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 9px var(--space-3);
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-family: var(--font-family);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-medium);
+    text-align: start;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color var(--interactive-dur) var(--ease-interactive), color var(--interactive-dur) var(--ease-interactive);
+}
+
+.menu-item svg {
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
+    color: var(--text-tertiary);
+    transition: color var(--interactive-dur) var(--ease-interactive);
+}
+
+.menu-item:hover {
+    color: var(--text-primary);
+    background-color: var(--tint);
+}
+
+.menu-item:hover svg {
+    color: var(--text-primary);
+}
+
+.menu-item:active {
+    transform: scale(0.98);
+}
+
+.export-menu-btn .menu-chevron {
+    width: 14px;
+    height: 14px;
+    transition: transform var(--interactive-dur) var(--ease-interactive);
+}
+
+.export-menu-btn[aria-expanded="true"] .menu-chevron {
+    transform: rotate(180deg);
+}
+
+/* The dropdown replaces the individual export buttons */
+.legacy-export {
+    display: none !important;
 }
 
 /* Controls */
@@ -1039,11 +1339,12 @@ body.modal-open {
 }
 
 .bar-btn.danger {
-    color: var(--danger);
+    color: var(--text-primary);
 }
 
 .bar-btn.danger:active {
-    background-color: rgba(239, 68, 68, 0.12);
+    background-color: var(--danger-tint);
+    color: var(--danger);
 }
 
 .bar-btn.primary {
@@ -1058,16 +1359,30 @@ body.modal-open {
     font-family: var(--font-family);
     font-size: var(--font-size-sm);
     font-weight: var(--font-semibold);
-    border: 2px solid;
+    border: 1px solid;
     border-radius: var(--radius-md);
     cursor: pointer;
-    transition: all var(--transition-fast);
+    transition: transform var(--interactive-dur) var(--ease-interactive), background-color var(--interactive-dur) var(--ease-interactive), border-color var(--interactive-dur) var(--ease-interactive), color var(--interactive-dur) var(--ease-interactive), box-shadow var(--interactive-dur) var(--ease-interactive), filter var(--interactive-dur) var(--ease-interactive);
 }
 
 .control-btn svg {
     width: 18px;
     height: 18px;
     flex-shrink: 0;
+    transition: transform var(--interactive-dur) var(--ease-interactive);
+}
+
+/* Press feedback: instant scale-down — the UI listens to the user */
+.control-btn:active,
+.bar-btn:active {
+    transform: scale(0.97);
+    transition-duration: 80ms;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .control-btn:hover svg {
+        transform: translateY(-1px);
+    }
 }
 
 .control-btn.primary {
@@ -1077,34 +1392,30 @@ body.modal-open {
 }
 
 .control-btn.primary:hover {
-    background-color: transparent;
-    color: var(--text-primary);
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-hard) var(--border-primary);
+    filter: brightness(0.88);
 }
 
 .control-btn.secondary {
-    background-color: var(--bg-tertiary);
+    background-color: var(--tint);
     border-color: var(--border-secondary);
     color: var(--text-primary);
 }
 
 .control-btn.secondary:hover {
-    background-color: var(--bg-hover);
+    background-color: var(--tint-strong);
     border-color: var(--border-focus);
-    transform: translateY(-2px);
 }
 
 .control-btn.danger {
     background-color: transparent;
-    border-color: var(--danger);
-    color: var(--danger);
+    border-color: var(--border-focus);
+    color: var(--text-primary);
 }
 
 .control-btn.danger:hover {
     background-color: var(--danger);
-    color: white;
-    transform: translateY(-2px);
+    border-color: var(--danger);
+    color: var(--danger-contrast);
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -1117,10 +1428,209 @@ body.modal-open {
     gap: var(--space-6);
 }
 
+/* ── Vertical glass tool dock (desktop) ────────────────────────
+   One slim frosted rail: every action as an icon button with a
+   tooltip. Sits beside the courses panel, full column height. */
+.tool-dock {
+    display: none; /* mobile & tablet: tools live in the floating dock */
+}
+
+@media (min-width: 1024px) {
+    .tool-dock {
+        display: flex;
+        flex-direction: column;
+        align-items: center; /* collapsed: icons dead-center in the 48px rail */
+        gap: 6px;
+        padding: 10px 7px;
+        background-color: var(--glass-header);
+        -webkit-backdrop-filter: blur(16px) saturate(1.4);
+        backdrop-filter: blur(16px) saturate(1.4);
+        border: 1px solid var(--border-primary);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-hard-lg);
+        align-self: start; /* hug content, don't stretch to row height */
+        max-height: 100%;
+        overflow-y: auto;
+        overflow-x: hidden;
+        scrollbar-width: none;
+        animation: rise-in 450ms var(--ease-out-ui) both;
+        animation-delay: 140ms;
+        transition: padding var(--interactive-dur) var(--ease-interactive);
+    }
+
+    /* ── Expand-on-hover: icons slide out to icon+label rows ──
+       The dock OVERLAYS its column (fixed width 48px → wide on hover) so
+       neighboring grid columns never reflow; the grid track change only
+       reserves space smoothly via .workspace.dock-expanded. Both stay in
+       sync through the shared transition timing. */
+    .tool-dock {
+        width: 100%;
+        min-width: 0;
+    }
+
+    /* Labels: hidden (width 0) in the rail state, revealed on expand */
+    .dock-label {
+        display: block;
+        overflow: hidden;
+        white-space: nowrap;
+        max-width: 0;
+        opacity: 0;
+        font-size: 12px;
+        font-weight: var(--font-medium);
+        line-height: 1;
+        transition: max-width var(--transition-slow) var(--ease-drawer),
+                    opacity 160ms ease 0ms,
+                    padding 0s;
+        pointer-events: none;
+        text-align: start;
+    }
+
+    .dock-sep {
+        transition: width var(--transition-slow) var(--ease-drawer);
+        align-self: center; /* collapsed: centered like the icons */
+    }
+
+    .tool-dock::-webkit-scrollbar { display: none; }
+
+    .dock-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center; /* collapsed: icon centered */
+        gap: 0; /* label gap appears with the label itself */
+        width: 38px;
+        max-width: 100%;
+        height: 38px;
+        flex-shrink: 0;
+        border: 1px solid transparent;
+        border-radius: var(--radius-md);
+        background: transparent;
+        color: var(--text-secondary);
+        cursor: pointer;
+        position: relative;
+        overflow: hidden;
+        transition: width var(--transition-slow) var(--ease-drawer),
+                    gap var(--transition-slow) var(--ease-drawer),
+                    transform var(--interactive-dur) var(--ease-interactive),
+                    background-color var(--interactive-dur) var(--ease-interactive),
+                    color var(--interactive-dur) var(--ease-interactive),
+                    border-color var(--interactive-dur) var(--ease-interactive);
+    }
+
+    .dock-btn svg {
+        width: 18px;
+        height: 18px;
+        pointer-events: none;
+    }
+
+    @media (hover: hover) {
+        .dock-btn:hover {
+            color: var(--text-primary);
+            background-color: var(--tint-strong);
+            border-color: var(--border-primary);
+            transform: translateY(-1px);
+        }
+    }
+
+    .dock-btn:active {
+        transform: scale(0.94);
+        transition-duration: 80ms;
+    }
+
+    .dock-btn:disabled {
+        opacity: 0.35;
+        cursor: not-allowed;
+        transform: none;
+    }
+
+    .dock-btn:disabled:hover {
+        color: var(--text-secondary);
+        background: transparent;
+        border-color: transparent;
+    }
+
+    .dock-btn.dock-danger:hover {
+        color: var(--danger);
+        border-color: var(--danger);
+    }
+
+    /* ── EXPANDED: the sliding drawer look — class toggled by JS
+       (pointerenter/leave + button focus/blur) so mouse & keyboard match ── */
+    .tool-dock.expanded {
+        align-items: stretch;
+        padding: 10px 9px;
+    }
+
+    .tool-dock.expanded .dock-btn {
+        width: 100%;
+        gap: 10px;
+        justify-content: flex-start;
+        padding-inline-start: 9px;
+    }
+
+    .tool-dock.expanded .dock-sep { align-self: stretch; }
+
+    .tool-dock.expanded .dock-label {
+        max-width: 140px;
+        opacity: 1;
+        transition: max-width var(--transition-slow) var(--ease-drawer),
+                    opacity 220ms ease 90ms; /* fade in as it slides open */
+    }
+
+    .tool-dock.expanded .dock-sep { width: calc(100% - 4px); }
+
+    /* While expanded, per-button tooltips are redundant — the label IS the tip */
+    .tool-dock.expanded .dock-btn::after {
+        opacity: 0 !important;
+        visibility: hidden !important;
+    }
+
+    /* Glass tooltip on hover */
+    .dock-btn::after {
+        content: attr(title);
+        position: absolute;
+        inset-inline-start: calc(100% + 10px);
+        top: 50%;
+        translate: 0 -50%;
+        padding: 5px 10px;
+        font-family: var(--font-family);
+        font-size: 11.5px;
+        font-weight: var(--font-medium);
+        white-space: nowrap;
+        color: var(--text-primary);
+        background-color: var(--glass-header);
+        -webkit-backdrop-filter: blur(12px);
+        backdrop-filter: blur(12px);
+        border: 1px solid var(--border-primary);
+        border-radius: var(--radius-sm);
+        box-shadow: var(--shadow-hard);
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        z-index: var(--z-dropdown);
+        transition: opacity 160ms var(--ease-interactive), visibility 0s linear 160ms;
+    }
+
+    @media (hover: hover) {
+        .dock-btn:hover::after {
+            opacity: 1;
+            visibility: visible;
+            transition: opacity 160ms var(--ease-interactive);
+        }
+    }
+
+    .dock-sep {
+        width: 22px;
+        height: 1px;
+        flex-shrink: 0;
+        margin: 3px 0;
+        background-color: var(--border-primary);
+    }
+}
+
 .courses-panel {
     display: none; /* mobile: hidden, use search bar */
     background-color: var(--bg-secondary);
-    border: 2px solid var(--border-primary);
+    border: 1px solid var(--border-primary);
     border-radius: var(--radius-lg);
     overflow: hidden;
     flex-shrink: 0;
@@ -1132,7 +1642,7 @@ body.modal-open {
     justify-content: space-between;
     padding: var(--space-4) var(--space-5);
     background-color: var(--bg-tertiary);
-    border-bottom: 2px solid var(--border-primary);
+    border-bottom: 1px solid var(--border-primary);
 }
 
 .panel-title {
@@ -1156,7 +1666,7 @@ body.modal-open {
     display: flex;
     align-items: center;
     padding: var(--space-3);
-    border-bottom: 2px solid var(--border-primary);
+    border-bottom: 1px solid var(--border-primary);
 }
 
 .panel-search-icon {
@@ -1175,9 +1685,9 @@ body.modal-open {
     font-size: var(--font-size-sm);
     color: var(--text-primary);
     background-color: var(--bg-primary);
-    border: 1.5px solid var(--border-primary);
-    border-radius: var(--radius-md);
-    transition: all var(--transition-fast);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-sm);
+    transition: transform var(--interactive-dur) var(--ease-interactive), border-color var(--interactive-dur) var(--ease-interactive), background-color var(--interactive-dur) var(--ease-interactive), color var(--interactive-dur) var(--ease-interactive), box-shadow var(--interactive-dur) var(--ease-interactive);
 }
 
 .panel-search-input:focus {
@@ -1198,13 +1708,13 @@ body.modal-open {
     border-radius: var(--radius-sm);
     color: var(--text-secondary);
     cursor: pointer;
-    transition: all var(--transition-fast);
+    transition: transform var(--interactive-dur) var(--ease-interactive), border-color var(--interactive-dur) var(--ease-interactive), background-color var(--interactive-dur) var(--ease-interactive), color var(--interactive-dur) var(--ease-interactive), box-shadow var(--interactive-dur) var(--ease-interactive);
 }
 
 .panel-search-clear:hover {
     background-color: var(--danger);
     border-color: var(--danger);
-    color: white;
+    color: var(--danger-contrast);
 }
 
 .panel-search-clear svg {
@@ -1220,12 +1730,12 @@ body.modal-open {
 }
 
 /* ─────────────────────────────────────────────────────────────
-   ADVANCED FILTER BAR
+   ADVANCED FILTER BAR — grouped, segmented, graphical
    ───────────────────────────────────────────────────────────── */
 
 .filter-bar {
     padding: var(--space-3);
-    border-bottom: 2px solid var(--border-primary);
+    border-bottom: 1px solid var(--border-primary);
     display: flex;
     flex-direction: column;
     gap: var(--space-2);
@@ -1239,6 +1749,21 @@ body.modal-open {
     align-items: center;
 }
 
+/* Sort segmented control living in the main chip row (compact) */
+.filter-sort-seg {
+    padding: 2px;
+    gap: 2px;
+}
+
+.filter-sort-seg .filter-seg {
+    font-size: var(--font-size-xs);
+    padding: 4px var(--space-3);
+}
+
+.filter-capacity-row {
+    gap: var(--space-2);
+}
+
 .filter-chip {
     display: inline-flex;
     align-items: center;
@@ -1248,11 +1773,11 @@ body.modal-open {
     font-weight: var(--font-medium);
     color: var(--text-secondary);
     background-color: var(--bg-primary);
-    border: 1.5px solid var(--border-primary);
-    border-radius: var(--radius-md);
+    border: 1px solid var(--border-primary);
+    border-radius: 999px;
     padding: 6px var(--space-3);
     cursor: pointer;
-    transition: all var(--transition-fast);
+    transition: transform var(--interactive-dur) var(--ease-interactive), border-color var(--interactive-dur) var(--ease-interactive), background-color var(--interactive-dur) var(--ease-interactive), color var(--interactive-dur) var(--ease-interactive), box-shadow var(--interactive-dur) var(--ease-interactive);
     user-select: none;
 }
 
@@ -1262,10 +1787,56 @@ body.modal-open {
     background-color: var(--bg-hover);
 }
 
+/* Active day/capacity chip: inverted pill + subtle lift */
 .filter-chip.active {
     color: var(--bg-primary);
     background-color: var(--text-primary);
     border-color: var(--text-primary);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    transform: translateY(-1px);
+}
+
+/* Week strip: 6 equal cells, always-visible day picker */
+.filter-week {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 4px;
+    width: 100%;
+    min-width: 0;
+}
+
+/* Inside the horizontal chip row: occupy a full wrapped line */
+.filter-row .filter-week {
+    flex: 1 1 100%;
+}
+
+.filter-week .filter-chip {
+    justify-content: center;
+    width: 100%;
+    padding: 8px 4px;
+    border-radius: var(--radius-sm);
+    font-size: 10.5px;
+    line-height: 1.2;
+}
+
+/* Active day: green = "this day is wanted" - the only accent in the strip */
+.filter-week .filter-chip.active {
+    color: var(--success-contrast);
+    background-color: var(--success);
+    border-color: var(--success);
+    box-shadow: 0 2px 10px color-mix(in srgb, var(--success) 35%, transparent);
+}
+
+@media (max-width: 380px) {
+    .filter-week .filter-chip {
+        font-size: 9.5px;
+        padding: 7px 2px;
+    }
+}
+
+.filter-chip:active {
+    transform: scale(0.96);
+    transition-duration: 80ms;
 }
 
 .filter-chip svg {
@@ -1276,6 +1847,7 @@ body.modal-open {
 .filter-toggle.open {
     color: var(--text-primary);
     border-color: var(--text-primary);
+    background-color: var(--tint-strong);
 }
 
 .filter-badge {
@@ -1286,65 +1858,413 @@ body.modal-open {
     height: 16px;
     font-size: 10px;
     font-weight: var(--font-bold);
-    background-color: var(--danger);
-    color: #fff;
-    border-radius: 8px;
+    background-color: var(--text-primary);
+    color: var(--bg-primary);
+    border-radius: 999px;
     padding: 0 4px;
 }
 
 .filter-clear {
     color: var(--danger);
-    border-color: var(--danger);
+    border-color: color-mix(in srgb, var(--danger) 45%, transparent);
 }
 
 .filter-clear:hover {
     background-color: var(--danger);
-    color: #fff;
+    border-color: var(--danger);
+    color: var(--danger-contrast);
 }
 
+/* ── Details area: expand/collapse with height animation ── */
 .filter-details {
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    overflow: hidden;
+    transition: grid-template-rows var(--transition-slow) var(--ease-drawer),
+                opacity var(--transition-base) ease;
+}
+
+.filter-details.open {
+    grid-template-rows: 1fr;
+    opacity: 1;
+}
+
+.filter-details > .filter-groups {
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* ── Groups: card per section, titled with an icon ── */
+.filter-groups {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
     padding-top: var(--space-2);
 }
 
+.filter-group {
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    background-color: var(--tint);
+    padding: var(--space-3);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.filter-group-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    justify-content: flex-start; /* RTL: title sits at the right edge */
+    margin: 0;
+    font-size: 11px;
+    font-weight: var(--font-bold);
+    color: var(--text-secondary);
+    letter-spacing: 0.2px;
+}
+
+.filter-group-title svg {
+    flex-shrink: 0;
+}
+
+.filter-group-title svg {
+    width: 13px;
+    height: 13px;
+    color: var(--text-tertiary);
+}
+
+/* ── Segmented controls (time mode / units / sort) ── */
+.filter-time-modes,
+.filter-unit-seg {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    background-color: var(--bg-primary);
+    border: 1px solid var(--border-primary);
+    border-radius: 999px;
+    padding: 3px;
+    width: fit-content;
+    max-width: 100%;
+}
+
+.filter-seg {
+    font-family: var(--font-family);
+    font-size: 11.5px;
+    font-weight: var(--font-semibold);
+    color: var(--text-secondary);
+    background: transparent;
+    border: none;
+    border-radius: 999px;
+    padding: 5px var(--space-3);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: transform var(--interactive-dur) var(--ease-interactive), background-color var(--interactive-dur) var(--ease-interactive), color var(--interactive-dur) var(--ease-interactive), box-shadow var(--interactive-dur) var(--ease-interactive);
+}
+
+.filter-seg:hover {
+    color: var(--text-primary);
+    background-color: var(--tint);
+}
+
+.filter-seg.active {
+    color: var(--bg-primary);
+    background-color: var(--text-primary);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+.filter-seg:active {
+    transform: scale(0.94);
+    transition-duration: 80ms;
+}
+
+
+/* ── Fields with leading icons + custom select chevron ── */
 .filter-detail-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: var(--space-2);
+    gap: var(--space-2) var(--space-3);
+}
+
+/* Long professor names: give the select the full row */
+.filter-detail-grid .filter-field:has([data-filter="professor"]) {
+    grid-column: 1 / -1;
 }
 
 .filter-field {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 4px;
+    min-width: 0;
 }
 
-.filter-field-wide {
-    grid-column: 1 / -1;
-}
-
-.filter-field span {
+.filter-field > span:first-child {
     font-size: 10px;
     font-weight: var(--font-semibold);
     color: var(--text-tertiary);
 }
 
-.filter-field select,
-.filter-field input {
-    width: 100%;
-    font-family: var(--font-family);
-    font-size: var(--font-size-sm);
-    color: var(--text-primary);
-    background-color: var(--bg-primary);
-    border: 1.5px solid var(--border-primary);
-    border-radius: var(--radius-sm);
-    padding: 7px var(--space-2);
-    transition: border-color var(--transition-fast);
+.filter-select-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
 }
 
-.filter-field select:focus,
-.filter-field input:focus {
+.filter-select-wrap > svg:first-child {
+    position: absolute;
+    inset-inline-start: 9px;
+    width: 13px;
+    height: 13px;
+    color: var(--text-tertiary);
+    pointer-events: none;
+}
+
+/* Chevron sits at the inline-end (left in RTL) */
+.filter-select-wrap > svg:last-child {
+    position: absolute;
+    inset-inline-end: 8px;
+    width: 12px;
+    height: 12px;
+    color: var(--text-tertiary);
+    pointer-events: none;
+    transition: transform var(--interactive-dur) var(--ease-interactive);
+}
+
+.filter-select-wrap:focus-within > svg:last-child {
+    transform: rotate(180deg);
+}
+
+.filter-select-wrap select,
+.filter-select-wrap input,
+select[data-filter] {
+    width: 100%;
+    height: 36px;
+    font-family: var(--font-family);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-medium);
+    color: var(--text-primary);
+    text-align: start;
+    background-color: var(--tint);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-sm);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.14);
+    padding: 0 32px 0 28px; /* right: leading icon, left: chevron (RTL) */
+    appearance: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+    transition: transform var(--interactive-dur) var(--ease-interactive), border-color var(--interactive-dur) var(--ease-interactive), background-color var(--interactive-dur) var(--ease-interactive), color var(--interactive-dur) var(--ease-interactive), box-shadow var(--interactive-dur) var(--ease-interactive);
+}
+
+.filter-select-wrap select option,
+select[data-filter] option {
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+.filter-select-wrap input {
+    cursor: text;
+    padding-inline-start: 32px;
+}
+
+/* Hour selects without an icon wrapper (slider pills carry the value) */
+select[data-filter="startHour"],
+select[data-filter="endHour"],
+select[data-filter="exactHour"] {
+    padding: 0 10px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+.filter-select-wrap input[data-filter="group"] {
+    direction: ltr;
+    text-align: center;
+    font-weight: var(--font-semibold);
+    letter-spacing: 1px;
+}
+
+.filter-select-wrap select:focus,
+.filter-select-wrap input:focus,
+select[data-filter]:focus {
     outline: none;
     border-color: var(--text-primary);
+    box-shadow: 0 0 0 3px var(--tint-strong);
+}
+
+.filter-select-wrap select:hover,
+.filter-select-wrap input:hover,
+select[data-filter]:hover {
+    border-color: var(--border-focus);
+}
+
+/* Dual-thumb time-range slider (RTL: right = early, left = late) */
+.filter-slider {
+    position: relative;
+    height: 28px;
+    margin-top: var(--space-2);
+    --lo: 0;
+    --hi: 100;
+}
+
+/* Track: full + filled segment between the two thumbs */
+.filter-slider::before,
+.filter-slider::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 6.5%;
+    right: 6.5%;
+    height: 5px;
+    border-radius: 999px;
+    transform: translateY(-50%);
+    pointer-events: none;
+}
+
+.filter-slider::before {
+    background-color: var(--border-primary);
+}
+
+/* Filled span: --lo/--hi are 0..100 within the 87%-wide band */
+.filter-slider::after {
+    left: calc(93.5% - var(--hi) * 0.87%);
+    right: calc(6.5% + var(--lo) * 0.87%);
+    background: linear-gradient(90deg,
+        color-mix(in srgb, var(--success) 80%, transparent),
+        var(--success));
+    box-shadow: 0 1px 6px color-mix(in srgb, var(--success) 30%, transparent);
+}
+
+.filter-slider input[type="range"] {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    margin: 0;
+    appearance: none;
+    -webkit-appearance: none;
+    background: transparent;
+    pointer-events: none; /* only thumbs are interactive */
+    height: 100%;
+}
+
+.filter-slider input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    pointer-events: auto;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background-color: var(--bg-secondary);
+    border: 2.5px solid var(--success);
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.4);
+    cursor: grab;
+    transition: transform var(--interactive-dur) var(--ease-interactive), box-shadow var(--interactive-dur) var(--ease-interactive);
+}
+
+.filter-slider input[type="range"]:active::-webkit-slider-thumb {
+    cursor: grabbing;
+    transform: scale(1.15);
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--success) 18%, transparent);
+}
+
+.filter-slider input[type="range"]:focus-visible {
+    outline: none;
+}
+
+.filter-slider input[type="range"]:focus-visible::-webkit-slider-thumb {
+    box-shadow: 0 0 0 4px var(--tint-strong), 0 0 0 6px var(--success);
+}
+
+/* Exact-hour slider: single thumb, white accent */
+.filter-slider.single::after {
+    left: calc(93.5% - var(--hi) * 0.87%);
+    right: 6.5%;
+    background: linear-gradient(90deg,
+        color-mix(in srgb, var(--text-primary) 55%, transparent),
+        var(--text-primary));
+    box-shadow: none;
+}
+
+.filter-slider.single input[type="range"]::-webkit-slider-thumb {
+    border-color: var(--text-primary);
+}
+
+.filter-slider.single input[type="range"]:active::-webkit-slider-thumb {
+    box-shadow: 0 0 0 6px var(--tint-strong);
+}
+
+/* Firefox natives */
+.filter-slider input[type="range"]::-moz-range-thumb {
+    pointer-events: auto;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background-color: var(--bg-secondary);
+    border: 2.5px solid var(--success);
+    cursor: grab;
+}
+
+.filter-slider input[type="range"]::-moz-range-track {
+    background: transparent;
+}
+
+/* Hour output pills under the slider thumbs */
+.filter-slider-outputs {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--space-2);
+    margin-top: 2px;
+}
+
+.filter-slider-out {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 64px;
+    justify-content: center;
+    font-size: 11.5px;
+    font-weight: var(--font-bold);
+    color: var(--success-contrast);
+    background-color: var(--success);
+    border-radius: 999px;
+    padding: 3px 10px;
+    font-variant-numeric: tabular-nums;
+    box-shadow: 0 1px 4px color-mix(in srgb, var(--success) 30%, transparent);
+}
+
+.filter-slider-out svg {
+    width: 11px;
+    height: 11px;
+    opacity: 0.85;
+}
+
+.filter-slider-out.is-empty {
+    color: var(--text-tertiary);
+    background-color: var(--tint);
+    box-shadow: none;
+    font-weight: var(--font-medium);
+}
+
+.filter-slider-out.is-empty svg {
+    opacity: 0.6;
+}
+
+/* Hidden native selects stay in the DOM for sync() + a11y */
+.filter-slider-select {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Time panes: animate between range/exact */
+.filter-time-pane {
+    animation: pane-in 200ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@keyframes pane-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 /* Mobile search section: only the trigger lives on the page */
@@ -1356,11 +2276,162 @@ body.modal-open {
     display: none;
 }
 
-/* Larger touch targets on mobile (44px recommended) */
+/* ── MOBILE FILTER MENU: unified rhythm + proper layout ──
+   One consistent scale for every control in the menu:
+   chips = segments = fields = 38px tall, 13px text, same radius family.
+   Rows breathe: single-column detail grid, spaced groups, full-width rows. */
 @media (max-width: 1023px) {
     .search-modal .filter-chip {
         padding: 9px var(--space-3);
         font-size: var(--font-size-sm);
+    }
+
+    /* 1) One height & type scale for the whole menu */
+    .filter-bar .filter-chip,
+    .filter-bar .filter-seg,
+    .filter-bar .filter-slider-out {
+        font-size: 13px;
+    }
+
+    .filter-bar .filter-week .filter-chip {
+        height: 38px;
+        font-size: 12px;
+    }
+
+    /* Day chips match the pill language of toggle/clear (one family) */
+    .filter-bar .filter-week .filter-chip {
+        border-radius: 999px;
+    }
+
+    /* 2) Segmented controls: 38px pills, aligned with chips */
+    .filter-bar .filter-time-modes,
+    .filter-bar .filter-unit-seg,
+    .filter-bar .filter-sort-seg {
+        width: 100%;
+        display: flex;
+        padding: 4px;
+        gap: 4px;
+    }
+
+    .filter-bar .filter-unit-seg .filter-seg,
+    .filter-bar .filter-sort-seg .filter-seg,
+    .filter-bar .filter-time-modes .filter-seg {
+        flex: 1 1 0;
+        min-width: 0;
+        height: 36px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 var(--space-3);
+        font-size: 12.5px;
+    }
+
+    /* Main row: toggle line, week strip line, sort line — each full-width
+       with clear separation; toggle+clear share the first line */
+    .filter-bar .filter-row-main {
+        row-gap: var(--space-3);
+    }
+
+    .filter-bar .filter-row-main .filter-toggle {
+        height: 38px;
+    }
+
+    /* Toggle sits alone on line 1 (row wraps naturally); give clear room too */
+    .filter-bar .filter-row-main .filter-clear {
+        margin-inline-start: auto;
+        height: 38px;
+    }
+
+    /* Week strip: comfortable pill row */
+    .filter-bar .filter-row-main .filter-week {
+        gap: 6px;
+    }
+
+    .filter-bar .filter-row-main .filter-week .filter-chip {
+        padding-block: 9px; /* full-height pills */
+    }
+
+    /* Sort row reads as its own block under the days */
+    .filter-bar .filter-row-main .filter-sort-seg {
+        margin-top: 2px;
+    }
+
+    /* 3) Detail grid: single column — fields breathe, labels align */
+    .filter-bar .filter-detail-grid {
+        grid-template-columns: 1fr;
+        gap: var(--space-3);
+    }
+
+    .filter-bar .filter-field > span:first-child {
+        font-size: 11px;
+    }
+
+    .filter-bar .filter-select-wrap select,
+    .filter-bar .filter-select-wrap input,
+    .filter-bar select[data-filter] {
+        height: 40px;
+        font-size: 13.5px;
+    }
+
+    /* 4) Time slider: taller touch surface + readable pills */
+    .filter-bar .filter-slider {
+        height: 34px;
+    }
+
+    .filter-bar .filter-slider-out {
+        min-width: 84px;
+        padding: 6px 12px;
+        font-size: 12.5px;
+    }
+
+    .filter-bar .filter-slider-out.is-empty {
+        color: var(--text-tertiary);
+        background: var(--bg-primary);
+        border: 1px dashed var(--border-primary);
+        box-shadow: none;
+    }
+
+    .filter-bar .filter-slider-outputs {
+        justify-content: space-between;
+        gap: var(--space-2);
+    }
+
+    /* 5) Groups: consistent card spacing */
+    .filter-bar .filter-group {
+        padding: var(--space-4);
+        gap: var(--space-3);
+    }
+
+    .filter-bar .filter-group-title {
+        font-size: 12px;
+    }
+
+    /* Time-mode switcher: full-width row like the other segments */
+    .filter-bar .filter-time-modes {
+        margin-bottom: 2px;
+    }
+
+    /* FIX: the filter menu must scroll on mobile. The bar (max-height: 62vh +
+       overflow-y: auto) is the scroll container, but the expand-animation
+       wrapper's overflow:hidden clipped the content to the open-pane height,
+       so the bar never saw real overflow. Once open, release the clip and
+       let the bar scroll the whole menu. */
+    .search-modal .filter-bar .filter-details.open {
+        overflow: visible;
+    }
+
+    .search-modal .filter-bar .filter-details.open > .filter-groups {
+        overflow: visible;
+    }
+
+    /* Same story for the sticky filter bar variant on the main page, if any
+       container clips it: keep scrollability consistent */
+    .filter-bar .filter-details.open {
+        overflow: visible;
+    }
+
+    .filter-bar .filter-details.open > .filter-groups {
+        overflow: visible;
     }
 }
 
@@ -1380,10 +2451,10 @@ body.modal-open {
     flex-shrink: 0;
     color: var(--text-secondary);
     background-color: var(--bg-tertiary);
-    border: 1.5px solid var(--border-primary);
+    border: 1px solid var(--border-primary);
     border-radius: var(--radius-md);
     cursor: pointer;
-    transition: all var(--transition-fast);
+    transition: transform var(--interactive-dur) var(--ease-interactive), border-color var(--interactive-dur) var(--ease-interactive), background-color var(--interactive-dur) var(--ease-interactive), color var(--interactive-dur) var(--ease-interactive), box-shadow var(--interactive-dur) var(--ease-interactive);
 }
 
 .panel-filter-toggle svg {
@@ -1411,9 +2482,9 @@ body.modal-open {
     height: 14px;
     font-size: 9px;
     font-weight: var(--font-bold);
-    background-color: var(--danger);
-    color: #fff;
-    border-radius: 8px;
+    background-color: var(--text-primary);
+    color: var(--bg-primary);
+    border-radius: 999px;
     padding: 0 3px;
 }
 
@@ -1426,7 +2497,7 @@ body.modal-open {
     display: none;
     flex-direction: column;
     background-color: var(--bg-secondary);
-    border: 2px solid var(--border-primary);
+    border: 1px solid var(--border-primary);
     border-radius: var(--radius-lg);
     overflow: hidden;
     position: sticky;
@@ -1437,7 +2508,7 @@ body.modal-open {
 
 .filter-drawer.open {
     display: flex;
-    animation: drawer-slide-in 250ms cubic-bezier(0.16, 1, 0.3, 1);
+    animation: drawer-slide-in 250ms var(--ease-drawer);
 }
 
 @keyframes drawer-slide-in {
@@ -1457,7 +2528,7 @@ body.modal-open {
     justify-content: space-between;
     padding: var(--space-4) var(--space-5);
     background-color: var(--bg-tertiary);
-    border-bottom: 2px solid var(--border-primary);
+    border-bottom: 1px solid var(--border-primary);
 }
 
 /* Mirror the panel header look */
@@ -1475,10 +2546,10 @@ body.modal-open {
     height: 28px;
     color: var(--text-secondary);
     background-color: var(--bg-secondary);
-    border: 1.5px solid var(--border-secondary);
+    border: 1px solid var(--border-secondary);
     border-radius: var(--radius-sm);
     cursor: pointer;
-    transition: all var(--transition-fast);
+    transition: transform var(--interactive-dur) var(--ease-interactive), border-color var(--interactive-dur) var(--ease-interactive), background-color var(--interactive-dur) var(--ease-interactive), color var(--interactive-dur) var(--ease-interactive), box-shadow var(--interactive-dur) var(--ease-interactive);
 }
 
 .filter-drawer-close svg {
@@ -1487,7 +2558,7 @@ body.modal-open {
 }
 
 .filter-drawer-close:hover {
-    color: #fff;
+    color: var(--danger-contrast);
     background-color: var(--danger);
     border-color: var(--danger);
 }
@@ -1502,16 +2573,37 @@ body.modal-open {
 }
 
 .filter-drawer-body .filter-details {
-    padding-top: 0;
+    grid-template-rows: 1fr;
+    opacity: 1; /* drawer variant: always expanded */
+    /* The drawer body is the scroll container; the expand-animation wrapper
+       must not clip the content (same bug as the mobile filter menu) or the
+       bottom groups become unreachable — no scrollbar ever appears. */
+    overflow: visible;
+}
+
+.filter-drawer-body .filter-details > .filter-groups {
+    overflow: visible;
 }
 
 .filter-drawer-body .filter-detail-grid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
+}
+
+.filter-drawer-body .filter-group {
+    background-color: var(--tint);
 }
 
 /* Focus-visible for keyboard users on filter controls */
 .filter-chip:focus-visible,
 .panel-filter-toggle:focus-visible,
+.btn-add-course:focus-visible,
+.dock-btn:focus-visible,
+.schedule-tab:focus-visible,
+.selected-item-remove:focus-visible {
+    outline: 2px solid var(--border-focus);
+    outline-offset: 2px;
+}
+
 .filter-drawer-close:focus-visible,
 .filter-field select:focus-visible,
 .filter-field input:focus-visible {
@@ -1519,15 +2611,31 @@ body.modal-open {
     outline-offset: 2px;
 }
 
-/* Reduced motion: drop transforms/transitions */
+/* Reduced motion: fewer and gentler animations, not zero —
+   keep opacity/color transitions that aid comprehension, drop movement */
 @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
     *::after {
         animation-duration: 0.01ms !important;
         animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
         scroll-behavior: auto !important;
+    }
+
+    .boot .summary-controls,
+    .boot .workspace > * {
+        opacity: 1;
+        animation: none;
+    }
+
+    .modal-content,
+    .toast,
+    .course-block {
+        transform: none !important;
+    }
+
+    .update-dot {
+        animation: none;
     }
 }
 
@@ -1542,7 +2650,7 @@ body.modal-open {
 
 .schedule-container {
     background-color: var(--bg-secondary);
-    border: 2px solid var(--border-primary);
+    border: 1px solid var(--border-primary);
     border-radius: var(--radius-lg);
     overflow: hidden;
     transition: border-color var(--transition-base);
@@ -1550,6 +2658,7 @@ body.modal-open {
 
 .schedule-container.over-limit {
     border-color: var(--danger);
+    box-shadow: 0 0 0 1px var(--danger);
 }
 
 .schedule-header {
@@ -1560,13 +2669,15 @@ body.modal-open {
     gap: var(--space-3);
     padding: var(--space-4) var(--space-6);
     background-color: var(--bg-tertiary);
-    border-bottom: 2px solid var(--border-primary);
+    border-bottom: 1px solid var(--border-primary);
 }
 
 .schedule-title {
-    font-size: var(--font-size-lg);
-    font-weight: var(--font-bold);
-    color: var(--text-primary);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-semibold);
+    color: var(--text-tertiary);
+    white-space: nowrap;
+    margin-inline-end: var(--space-2);
 }
 
 /* ── Multi-schedule tabs (حالت برنامه چندتایی) ─────────────── */
@@ -1575,8 +2686,9 @@ body.modal-open {
     align-items: center;
     flex-wrap: wrap;
     gap: var(--space-2);
-    width: 100%;
-    order: -1; /* tabs row above the title/actions row */
+    flex: 0 1 auto;
+    min-width: 0;
+    order: -1; /* same row as the title, at the reading edge */
 }
 
 .schedule-tab {
@@ -1584,38 +2696,48 @@ body.modal-open {
     align-items: center;
     gap: var(--space-2);
     padding: 6px var(--space-3);
-    background-color: var(--bg-secondary);
-    border: 1px solid var(--border-primary);
-    border-bottom: 2px solid transparent;
+    background-color: transparent;
+    border: 1px solid transparent;
     border-radius: var(--radius-md);
     color: var(--text-secondary);
     font-size: var(--font-size-sm);
     font-weight: var(--font-semibold);
     cursor: pointer;
     user-select: none;
-    transition: color var(--transition-fast), border-color var(--transition-fast),
-        background-color var(--transition-fast);
+    transition: color var(--interactive-dur) var(--ease-interactive), border-color var(--interactive-dur) var(--ease-interactive),
+        background-color var(--interactive-dur) var(--ease-interactive), transform var(--interactive-dur) var(--ease-interactive);
 }
 
-.schedule-tab:hover {
-    color: var(--text-primary);
-    border-color: var(--accent, var(--text-primary));
+@media (hover: hover) and (pointer: fine) {
+    .schedule-tab:hover {
+        color: var(--text-primary);
+        background-color: var(--tint);
+        border-color: var(--border-primary);
+    }
 }
 
+/* Active tab = inverted chip (seamless grayscale emphasis) */
 .schedule-tab.active {
-    color: var(--text-primary);
-    background-color: rgba(99, 102, 241, 0.12);
-    border-color: rgba(99, 102, 241, 0.6);
-    border-bottom-color: rgba(99, 102, 241, 0.9);
+    color: var(--tab-active-fg);
+    background-color: var(--tab-active-bg);
+    border-color: var(--tab-active-bg);
 }
 
 .schedule-tab-count {
     padding: 0 6px;
     border-radius: 999px;
-    background-color: rgba(255, 255, 255, 0.08);
+    background-color: var(--tint-strong);
     font-size: 11px;
     font-weight: var(--font-bold);
     line-height: 18px;
+}
+
+.schedule-tab.active .schedule-tab-count {
+    background-color: rgba(255, 255, 255, 0.18);
+}
+
+.light-mode .schedule-tab.active .schedule-tab-count {
+    background-color: rgba(0, 0, 0, 0.12);
 }
 
 .schedule-tab-delete {
@@ -1636,7 +2758,7 @@ body.modal-open {
 
 .schedule-tab-delete:hover {
     color: var(--danger);
-    background-color: rgba(239, 68, 68, 0.15);
+    background-color: var(--danger-tint);
 }
 
 .schedule-tab-add {
@@ -1661,19 +2783,29 @@ body.modal-open {
     border-color: var(--accent, var(--text-primary));
 }
 
-/* 20-units warning flag */
+/* 20-units warning flag — red attention signal */
 .units-flag {
     display: none;
     align-items: center;
     gap: var(--space-2);
     padding: var(--space-2) var(--space-4);
-    background-color: rgba(239, 68, 68, 0.12);
-    border: 2px solid var(--danger);
+    background-color: var(--danger-tint);
+    border: 1px solid var(--danger);
     border-radius: var(--radius-md);
     color: var(--danger);
     font-size: var(--font-size-sm);
     font-weight: var(--font-bold);
     animation: flagPulse 1.6s ease infinite;
+}
+
+/* Entrance for the units flag — rise with the drawer curve */
+@keyframes flag-rise {
+    from { opacity: 0; transform: translateY(4px) scale(0.97); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.units-flag.visible {
+    animation: flag-rise 250ms var(--ease-drawer);
 }
 
 .units-flag.visible {
@@ -1687,8 +2819,8 @@ body.modal-open {
 }
 
 @keyframes flagPulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.35); }
-    50% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0.08); }
+    0%, 100% { box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.35); }
+    50% { box-shadow: 0 0 0 6px rgba(248, 113, 113, 0.08); }
 }
 
 .table-wrapper {
@@ -1711,7 +2843,7 @@ body.modal-open {
     gap: var(--space-2);
     padding: var(--space-2) var(--space-3);
     background-color: var(--bg-secondary);
-    border: 2px solid var(--border-primary);
+    border: 1px solid var(--border-primary);
     border-radius: var(--radius-md);
     color: var(--text-secondary);
     font-family: inherit;
@@ -1749,7 +2881,7 @@ body.modal-open {
     gap: var(--space-2);
     padding: var(--space-2) var(--space-3);
     background-color: var(--bg-secondary);
-    border: 2px solid var(--border-primary);
+    border: 1px solid var(--border-primary);
     border-radius: var(--radius-md);
     color: var(--text-secondary);
     font-family: inherit;
@@ -1846,12 +2978,13 @@ body.modal-open {
 
 /* Time Header Row */
 .time-header th {
-    background-color: var(--bg-tertiary);
+    background-color: var(--tint);
     color: var(--text-secondary);
     font-weight: var(--font-semibold);
     border: 1px solid var(--border-primary);
     min-width: 60px;
     direction: ltr;
+    font-size: var(--font-size-xs);
 }
 
 .time-header .day-header {
@@ -1872,20 +3005,21 @@ body.modal-open {
 }
 
 .day-row td {
-    background-color: var(--bg-primary);
+    background-color: color-mix(in srgb, var(--bg-primary) 60%, transparent);
     border: 1px solid var(--border-primary);
     height: 72px;
     min-width: 62px;
     position: relative;
-    transition: background-color var(--transition-fast);
+    transition: background-color 140ms ease;
     padding: 0;
 }
 
 .day-row td:hover {
-    background-color: var(--bg-tertiary);
+    background-color: var(--tint);
 }
 
-/* Course Blocks - Multi-hour spanning support (RTL) */
+/* Course Blocks - light-gray chips w/ dark ink; entrance via @starting-style
+   (falls back gracefully: appears instantly in older browsers) */
 .course-block {
     position: absolute;
     top: 3px;
@@ -1897,18 +3031,24 @@ body.modal-open {
     justify-content: center;
     align-items: center;
     gap: 2px;
-    transition: all var(--transition-fast);
+    transition: transform var(--interactive-dur) var(--ease-interactive), box-shadow var(--interactive-dur) var(--ease-interactive), filter var(--interactive-dur) var(--ease-interactive);
     overflow: hidden;
     z-index: 10;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
     padding: 4px;
-    border: 1px solid rgba(255, 255, 255, 0.25);
+    border: 1px solid rgba(0, 0, 0, 0.35);
+    color: var(--block-ink);
+
+    @starting-style {
+        opacity: 0;
+        transform: scale(0.95) translateY(2px);
+    }
 }
 
 .course-block:hover {
     z-index: 20;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
-    filter: brightness(1.12);
+    box-shadow: var(--shadow-lift);
+    transform: translateY(-2px);
 }
 
 /* Flow variant (transposed fit-mode grid): static content inside the day
@@ -1948,7 +3088,7 @@ body.modal-open {
 .course-block-name {
     font-size: 11px;
     font-weight: var(--font-semibold);
-    color: white;
+    color: var(--block-ink);
     text-align: center;
     line-height: 1.3;
     overflow: hidden;
@@ -1961,17 +3101,17 @@ body.modal-open {
 .course-block-time {
     font-size: 10px;
     font-weight: var(--font-medium);
-    color: rgba(255, 255, 255, 0.85);
+    color: var(--block-ink-soft);
     direction: ltr;
 }
 
 .course-block-group {
     font-size: 9px;
     font-weight: var(--font-medium);
-    color: rgba(255, 255, 255, 0.75);
-    background-color: rgba(0, 0, 0, 0.25);
+    color: var(--block-ink-soft);
+    background-color: rgba(0, 0, 0, 0.08);
     padding: 1px 5px;
-    border-radius: 3px;
+    border-radius: var(--radius-xs);
 }
 
 /* ── Week parity (زوج/فرد) ──────────────────────────────────────
@@ -1986,16 +3126,16 @@ body.modal-open {
     color: #0a0a0a;
     background-color: rgba(255, 255, 255, 0.85);
     padding: 1px 4px;
-    border-radius: 3px;
+    border-radius: var(--radius-xs);
     line-height: 1.4;
 }
 
 .course-block.parity-even {
-    border: 1px dashed rgba(255, 255, 255, 0.75);
+    border: 1px dashed rgba(0, 0, 0, 0.55);
 }
 
 .course-block.parity-odd {
-    border: 1px solid rgba(255, 255, 255, 0.4);
+    border: 1px solid rgba(0, 0, 0, 0.3);
 }
 
 /* Shared hour: even weeks take the right half (RTL first), odd the left —
@@ -2024,9 +3164,9 @@ body.modal-open {
     font-size: var(--font-size-xs);
     font-weight: var(--font-semibold);
     color: var(--text-primary);
-    background-color: rgba(255, 255, 255, 0.12);
+    background-color: var(--tint);
     border: 1px solid var(--border-primary);
-    border-radius: 3px;
+    border-radius: var(--radius-xs);
 }
 
 /* "Other courses" row (no fixed class time) */
@@ -2050,10 +3190,10 @@ body.modal-open {
     padding: var(--space-2) var(--space-3);
     margin: var(--space-1);
     background-color: var(--bg-secondary);
-    border: 2px solid;
+    border: 1px solid;
     border-radius: var(--radius-md);
     cursor: pointer;
-    transition: all var(--transition-fast);
+    transition: transform var(--interactive-dur) var(--ease-interactive), border-color var(--interactive-dur) var(--ease-interactive), background-color var(--interactive-dur) var(--ease-interactive), color var(--interactive-dur) var(--ease-interactive), box-shadow var(--interactive-dur) var(--ease-interactive);
     vertical-align: top;
     max-width: 260px;
 }
@@ -2085,26 +3225,31 @@ body.modal-open {
 .modal-overlay {
     position: fixed;
     inset: 0;
-    background-color: rgba(0, 0, 0, 0.8);
-    backdrop-filter: blur(4px);
+    background-color: var(--overlay-veil);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
     display: flex;
     align-items: center;
     justify-content: center;
     padding: var(--space-4);
     opacity: 0;
     visibility: hidden;
-    transition: all var(--transition-base);
+    /* Exit (base state): fade FASTER than entry, ease-out moves immediately */
+    transition: opacity var(--modal-dur-fast) cubic-bezier(0.23, 1, 0.32, 1),
+                visibility 0s linear var(--modal-dur-fast);
     z-index: var(--z-modal);
 }
 
 .modal-overlay.active {
     opacity: 1;
     visibility: visible;
+    /* Enter: full duration */
+    transition: opacity var(--modal-dur) var(--ease-modal);
 }
 
 .modal-content {
     background-color: var(--bg-secondary);
-    border: 2px solid var(--border-primary);
+    border: 1px solid var(--border-secondary);
     border-radius: var(--radius-lg);
     width: 100%;
     max-width: 500px;
@@ -2112,12 +3257,20 @@ body.modal-open {
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    transform: scale(0.95);
-    transition: transform var(--transition-base);
+    box-shadow: var(--shadow-lift);
+    /* Exit: sink + fade fast, ease-out so it starts sinking immediately */
+    transform: scale(0.96) translateY(10px);
+    opacity: 0;
+    transition: transform var(--modal-dur-fast) cubic-bezier(0.23, 1, 0.32, 1),
+                opacity var(--modal-dur-fast) cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .modal-overlay.active .modal-content {
-    transform: scale(1);
+    /* Enter: full-duration rise */
+    transform: scale(1) translateY(0);
+    opacity: 1;
+    transition: transform var(--modal-dur) var(--ease-modal),
+                opacity var(--modal-dur) var(--ease-modal);
 }
 
 .modal-content.modal-large {
@@ -2134,7 +3287,7 @@ body.modal-open {
     justify-content: space-between;
     padding: var(--space-4) var(--space-6);
     background-color: var(--bg-tertiary);
-    border-bottom: 2px solid var(--border-primary);
+    border-bottom: 1px solid var(--border-primary);
 }
 
 .modal-title {
@@ -2149,18 +3302,22 @@ body.modal-open {
     display: flex;
     align-items: center;
     justify-content: center;
-    background-color: var(--bg-secondary);
-    border: 2px solid var(--border-primary);
+    background-color: var(--tint);
+    border: 1px solid var(--border-primary);
     border-radius: var(--radius-sm);
     color: var(--text-secondary);
     cursor: pointer;
-    transition: all var(--transition-fast);
+    transition: transform var(--interactive-dur) var(--ease-interactive), background-color var(--interactive-dur) var(--ease-interactive), color var(--interactive-dur) var(--ease-interactive);
 }
 
 .modal-close:hover {
     background-color: var(--danger);
-    border-color: var(--danger);
-    color: white;
+    color: var(--danger-contrast);
+    transform: rotate(90deg);
+}
+
+.modal-close:active {
+    transform: rotate(90deg) scale(0.9);
 }
 
 .modal-close svg {
@@ -2180,7 +3337,7 @@ body.modal-open {
     gap: var(--space-3);
     padding: var(--space-4) var(--space-6);
     background-color: var(--bg-tertiary);
-    border-top: 2px solid var(--border-primary);
+    border-top: 1px solid var(--border-primary);
     justify-content: flex-end;
 }
 
@@ -2192,20 +3349,27 @@ body.modal-open {
     font-family: var(--font-family);
     font-size: var(--font-size-sm);
     font-weight: var(--font-semibold);
-    border: 2px solid;
+    border: 1px solid;
     border-radius: var(--radius-md);
     cursor: pointer;
-    transition: all var(--transition-fast);
+    transition: transform var(--interactive-dur) var(--ease-interactive), background-color var(--interactive-dur) var(--ease-interactive), border-color var(--interactive-dur) var(--ease-interactive), color var(--interactive-dur) var(--ease-interactive), filter var(--interactive-dur) var(--ease-interactive);
+}
+
+.btn-secondary:active,
+.btn-danger:active,
+.btn-primary:active {
+    transform: scale(0.97);
+    transition-duration: 80ms;
 }
 
 .btn-secondary {
-    background-color: var(--bg-secondary);
+    background-color: var(--tint);
     border-color: var(--border-secondary);
     color: var(--text-primary);
 }
 
 .btn-secondary:hover {
-    background-color: var(--bg-hover);
+    background-color: var(--tint-strong);
     border-color: var(--border-focus);
 }
 
@@ -2216,19 +3380,19 @@ body.modal-open {
 }
 
 .btn-primary:hover {
-    background-color: transparent;
-    color: var(--text-primary);
+    filter: brightness(0.88);
 }
 
 .btn-danger {
     background-color: var(--danger);
     border-color: var(--danger);
-    color: white;
+    color: var(--danger-contrast);
 }
 
 .btn-danger:hover {
     background-color: transparent;
-    color: var(--danger);
+    color: var(--text-primary);
+    border-color: var(--border-focus);
 }
 
 /* Course Info in Modal */
@@ -2303,9 +3467,9 @@ body.modal-open {
     gap: var(--space-3);
     padding: var(--space-4);
     background-color: var(--bg-tertiary);
-    border: 2px solid var(--border-primary);
+    border: 1px solid var(--border-primary);
     border-radius: var(--radius-md);
-    transition: all var(--transition-fast);
+    transition: transform var(--interactive-dur) var(--ease-interactive), border-color var(--interactive-dur) var(--ease-interactive), background-color var(--interactive-dur) var(--ease-interactive), color var(--interactive-dur) var(--ease-interactive), box-shadow var(--interactive-dur) var(--ease-interactive);
 }
 
 .selected-item:hover {
@@ -2343,6 +3507,10 @@ body.modal-open {
     color: var(--text-secondary);
 }
 
+.selected-item {
+    border-inline-start: 3px solid var(--course-accent, var(--border-focus));
+}
+
 .selected-item-remove {
     width: 32px;
     height: 32px;
@@ -2350,17 +3518,18 @@ body.modal-open {
     align-items: center;
     justify-content: center;
     background-color: var(--bg-secondary);
-    border: 2px solid var(--danger);
+    border: 1px solid var(--border-focus);
     border-radius: var(--radius-sm);
     color: var(--danger);
     cursor: pointer;
-    transition: all var(--transition-fast);
+    transition: transform var(--interactive-dur) var(--ease-interactive), border-color var(--interactive-dur) var(--ease-interactive), background-color var(--interactive-dur) var(--ease-interactive), color var(--interactive-dur) var(--ease-interactive), box-shadow var(--interactive-dur) var(--ease-interactive);
     flex-shrink: 0;
 }
 
 .selected-item-remove:hover {
     background-color: var(--danger);
-    color: white;
+    border-color: var(--danger);
+    color: var(--danger-contrast);
 }
 
 .selected-item-remove svg {
@@ -2369,6 +3538,15 @@ body.modal-open {
 }
 
 .empty-state {
+    animation: empty-in 240ms ease-out both;
+}
+
+@keyframes empty-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: none; }
+}
+
+.empty-state-static {
     text-align: center;
     padding: var(--space-10);
     color: var(--text-tertiary);
@@ -2381,7 +3559,7 @@ body.modal-open {
     opacity: 0.5;
 }
 
-/* Conflict Modal */
+/* Conflict Modal — red attention icon disc */
 .conflict-icon {
     width: 64px;
     height: 64px;
@@ -2389,10 +3567,16 @@ body.modal-open {
     display: flex;
     align-items: center;
     justify-content: center;
-    background-color: rgba(239, 68, 68, 0.1);
-    border: 2px solid var(--danger);
+    background-color: var(--danger-tint);
+    border: 1px solid var(--danger);
     border-radius: 50%;
     color: var(--danger);
+    animation: icon-in 300ms var(--ease-drawer);
+}
+
+@keyframes icon-in {
+    from { opacity: 0; transform: scale(0.9); }
+    to { opacity: 1; transform: scale(1); }
 }
 
 .conflict-icon svg {
@@ -2445,7 +3629,7 @@ body.modal-open {
     font-size: var(--font-size-sm);
     color: var(--text-primary);
     background-color: var(--bg-tertiary);
-    border: 1.5px solid var(--border-primary);
+    border: 1px solid var(--border-primary);
     border-radius: var(--radius-sm);
     padding: var(--space-2) var(--space-3);
     cursor: pointer;
@@ -2493,7 +3677,7 @@ body.modal-open {
     display: flex;
     gap: var(--space-2);
     padding: 0 var(--space-6);
-    border-bottom: 2px solid var(--border-primary);
+    border-bottom: 1px solid var(--border-primary);
     background-color: var(--bg-secondary);
 }
 
@@ -2573,7 +3757,7 @@ body.modal-open {
     font-weight: var(--font-bold);
     color: var(--text-primary);
     background-color: var(--bg-tertiary);
-    border: 2px solid var(--text-primary);
+    border: 1px solid var(--text-primary);
     border-radius: 50%;
     z-index: 1;
 }
@@ -2642,7 +3826,7 @@ body.modal-open {
     margin-top: var(--space-4);
     position: relative;
     padding-top: 56.25%; /* 16:9 */
-    border: 2px solid var(--border-primary);
+    border: 1px solid var(--border-primary);
     border-radius: var(--radius-md);
     overflow: hidden;
     background-color: var(--bg-primary);
@@ -2657,15 +3841,14 @@ body.modal-open {
     object-fit: contain; /* never crop, never overflow the frame */
     background-color: var(--bg-primary);
 }
-}
 
 .custom-data-warning {
     display: block;
     margin-top: var(--space-2);
     padding: var(--space-2) var(--space-3);
-    color: var(--warning, #f59e0b);
-    background-color: rgba(245, 158, 11, 0.08);
-    border: 1px solid rgba(245, 158, 11, 0.35);
+    color: var(--text-primary);
+    background-color: var(--tint);
+    border: 1px solid var(--border-focus);
     border-radius: var(--radius-md);
     font-weight: 600;
 }
@@ -2690,7 +3873,7 @@ body.modal-open {
     line-height: 1.6;
     color: var(--text-primary);
     background-color: var(--bg-primary);
-    border: 2px solid var(--border-primary);
+    border: 1px solid var(--border-primary);
     border-radius: var(--radius-md);
     resize: vertical;
     transition: border-color var(--transition-fast);
@@ -2740,43 +3923,32 @@ body.modal-open {
     gap: var(--space-3);
     padding: var(--space-4) var(--space-5);
     background-color: var(--bg-secondary);
-    border: 2px solid var(--border-primary);
+    border: 1px solid var(--border-secondary);
     border-radius: var(--radius-md);
-    box-shadow: var(--shadow-hard-lg) rgba(0, 0, 0, 0.3);
+    box-shadow: var(--shadow-lift);
     pointer-events: auto;
-    animation: slideIn 300ms ease;
     max-width: 380px;
+    transform: translateX(-110%);
+    opacity: 0;
+    transition: transform 400ms cubic-bezier(0.32, 0.72, 0, 1),
+                opacity 400ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 
-.toast.success { border-color: var(--success); }
-.toast.error { border-color: var(--danger); }
-.toast.warning { border-color: var(--warning); }
-.toast.info { border-color: var(--info); }
+.toast.entered {
+    transform: translateX(0);
+    opacity: 1;
+}
 
+.toast.success { border-inline-start: 3px solid var(--success); }
+.toast.error { border-inline-start: 3px solid var(--danger); }
+.toast.warning { border-inline-start: 3px solid var(--warning); }
+.toast.info { border-inline-start: 3px solid var(--border-focus); }
+
+/* Exit: faster than enter — leave quickly, arrive smoothly */
 .toast.removing {
-    animation: slideOut 300ms ease forwards;
-}
-
-@keyframes slideIn {
-    from {
-        opacity: 0;
-        transform: translateX(-100%);
-    }
-    to {
-        opacity: 1;
-        transform: translateX(0);
-    }
-}
-
-@keyframes slideOut {
-    from {
-        opacity: 1;
-        transform: translateX(0);
-    }
-    to {
-        opacity: 0;
-        transform: translateX(-100%);
-    }
+    transform: translateX(-110%);
+    opacity: 0;
+    transition: transform 200ms ease-out, opacity 200ms ease-out;
 }
 
 .toast-icon {
@@ -2788,7 +3960,7 @@ body.modal-open {
 .toast.success .toast-icon { color: var(--success); }
 .toast.error .toast-icon { color: var(--danger); }
 .toast.warning .toast-icon { color: var(--warning); }
-.toast.info .toast-icon { color: var(--info); }
+.toast.info .toast-icon { color: var(--text-secondary); }
 
 .toast-message {
     font-size: var(--font-size-sm);
@@ -2804,7 +3976,7 @@ body.modal-open {
     margin-top: auto;
     padding: var(--space-5);
     background-color: var(--bg-secondary);
-    border-top: 2px solid var(--border-primary);
+    border-top: 1px solid var(--border-primary);
 }
 
 .footer-content {
@@ -2849,30 +4021,102 @@ body.modal-open {
         display: none;
     }
 
-    .workspace {
-        display: grid;
-        grid-template-columns: 360px minmax(0, 1fr);
-        align-items: start;
-        transition: grid-template-columns var(--transition-slow) cubic-bezier(0.16, 1, 0.3, 1);
+    /* Stats live in the header on desktop */
+    .header-stats {
+        display: flex;
     }
 
-    /* Filter drawer becomes a third grid column (rightmost in RTL) and squeezes the schedule */
+    .main-container {
+        flex: 1 1 0; /* fill body's column flex; body is 100dvh via html,body rule */
+        flex-basis: 0;
+        height: calc(100vh - var(--header-h, 64px));
+        min-height: 0; /* flex item: kill content-based minimum so the cap holds */
+        max-height: calc(100vh - var(--header-h, 64px)); /* height alone can't cap a flex item on the main axis */
+        padding: var(--space-3) var(--space-5) var(--space-4);
+        gap: var(--space-3);
+        overflow: hidden; /* page never scrolls; panels scroll internally */
+    }
+
+    .search-section {
+        display: none;
+    }
+
+    /* Tools moved into the vertical glass dock — the toolbar row is gone */
+    .summary-controls {
+        display: none;
+    }
+
+    .workspace {
+        display: grid;
+        grid-template-columns: 48px 360px minmax(0, 1fr);
+        grid-template-rows: minmax(0, 1fr); /* the row IS the container height */
+        align-items: stretch; /* panel and table share the same height */
+        flex: 1;
+        min-height: 0;
+        transition: grid-template-columns var(--transition-slow) var(--ease-drawer);
+    }
+
+    /* Dock expanded: its column grows and everything slides over smoothly
+       (the transition above animates the grid track, not the dock itself) */
+    .workspace.dock-expanded {
+        grid-template-columns: 186px 360px minmax(0, 1fr);
+    }
+
+    /* Filter drawer becomes a fourth column (rightmost in RTL) and squeezes the schedule */
     .workspace.drawer-open {
-        grid-template-columns: minmax(260px, 300px) 360px minmax(0, 1fr);
+        grid-template-columns: 48px minmax(260px, 300px) 360px minmax(0, 1fr);
+    }
+
+    /* Drawer + expanded dock together */
+    .workspace.drawer-open.dock-expanded {
+        grid-template-columns: 186px minmax(260px, 300px) 360px minmax(0, 1fr);
     }
 
     .courses-panel {
         display: flex;
         flex-direction: column;
-        position: sticky;
-        top: 90px;
-        max-height: calc(100vh - 120px);
+        position: static;
+        max-height: none;
+        min-height: 0;
     }
 
     .panel-list {
         flex: 1;
         max-height: none;
         min-height: 0;
+    }
+
+    /* Schedule column mirrors the panel: header fixed, table scrolls inside */
+    .schedule-section {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+    }
+
+    .schedule-container {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .table-wrapper {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+    }
+
+    /* Filter drawer: same height as its siblings (no sticky/max-height) */
+    .filter-drawer {
+        position: static;
+        max-height: none;
+        min-height: 0;
+    }
+
+    .filter-drawer-body {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
     }
 
     .summary-controls {
@@ -2946,6 +4190,26 @@ body.modal-open {
 
     .filter-drawer {
         display: none !important;
+    }
+
+    /* Schedule fills the remaining row height; wrapper scrolls internally */
+    .schedule-section {
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .schedule-container {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        flex: 1;
+    }
+
+    .table-wrapper {
+        flex: 1;
+        min-height: 0;
+        overflow: auto; /* x + y both scroll inside the frame */
     }
 
     /* Normal mobile schedule = full day-rows/hour-columns grid: cells keep
@@ -3067,6 +4331,7 @@ body.modal-open {
     .app-header,
     .search-section,
     .summary-controls,
+    .tool-dock,
     .courses-panel,
     .app-footer,
     .modal-overlay,
@@ -3122,10 +4387,10 @@ body.modal-open {
     gap: var(--space-2);
     width: fit-content;
     margin-inline: auto; /* center the pill */
-    background-color: rgba(20, 20, 20, 0.97);
+    background-color: var(--glass-header);
     -webkit-backdrop-filter: blur(14px);
     backdrop-filter: blur(14px);
-    border: 2px solid var(--border-primary);
+    border: 1px solid var(--border-secondary);
     border-radius: 999px;
     padding: 6px;
     box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
@@ -3146,7 +4411,7 @@ body.modal-open {
 }
 .dock-pill-btn:active { background-color: var(--bg-hover); }
 .dock-pill-btn svg { width: 21px; height: 21px; }
-.dock-pill-btn.danger { color: #f87171; }
+.dock-pill-btn.danger { color: var(--text-primary); }
 
 .dock-fab {
     pointer-events: auto;
@@ -3193,36 +4458,38 @@ body.modal-open {
     bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px) + 84px); /* sits right above the pill dock */
     left: var(--space-3);
     right: var(--space-3);
-    background-color: rgba(20, 20, 20, 0.97);
+    background-color: var(--glass-header);
     -webkit-backdrop-filter: blur(14px);
     backdrop-filter: blur(14px);
-    border: 2px solid var(--border-primary);
+    border: 1px solid var(--border-secondary);
     border-radius: var(--radius-lg);
     padding: var(--space-3);
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
-    /* Expand from the dock pill: collapsed state hugs the pill's spot */
+    /* Expand from the dock pill: collapsed state hugs the pill's spot.
+       Exit: shrink back fast with ease-out + staggered button fade resets. */
     transform-origin: 50% 100%;
     transform: scale(0.2) translateY(30px);
     opacity: 0;
     visibility: hidden;
-    transition: transform var(--transition-slow) cubic-bezier(0.16, 1, 0.3, 1),
-                opacity var(--transition-base),
-                visibility 0s linear var(--transition-slow);
+    transition: transform 200ms cubic-bezier(0.23, 1, 0.32, 1),
+                opacity 180ms cubic-bezier(0.23, 1, 0.32, 1),
+                visibility 0s linear 200ms;
 }
 .mobile-action-bar.open .dock-sheet {
     transform: scale(1) translateY(0);
     opacity: 1;
     visibility: visible;
-    transition: transform var(--transition-slow) cubic-bezier(0.16, 1, 0.3, 1),
-                opacity var(--transition-base);
+    transition: transform var(--transition-slow) var(--ease-drawer),
+                opacity var(--transition-base) ease-out;
 }
 
-/* Grid buttons cascade in as the sheet expands */
+/* Grid buttons cascade in as the sheet expands; on close they reset instantly
+   (delays only apply while open — exit must not stagger) */
 .dock-sheet .bar-btn {
     opacity: 0;
     transform: translateY(10px) scale(0.9);
-    transition: transform var(--transition-base) cubic-bezier(0.16, 1, 0.3, 1),
-                opacity var(--transition-base);
+    transition: transform var(--transition-base) var(--ease-drawer),
+                opacity var(--transition-base) ease-out;
 }
 .mobile-action-bar.open .dock-sheet .bar-btn {
     opacity: 1;
@@ -3260,7 +4527,7 @@ body.modal-open {
 
 .dock-sheet .bar-btn {
     background-color: var(--bg-secondary);
-    border: 1.5px solid var(--border-primary);
+    border: 1px solid var(--border-primary);
     border-radius: var(--radius-md);
     padding: var(--space-3) 4px;
     font-size: 11px;
@@ -3346,8 +4613,8 @@ body.modal-open {
 }
 
 .schedule-tab-duplicate:hover {
-    color: var(--accent, #818cf8);
-    background-color: rgba(99, 102, 241, 0.15);
+    color: var(--text-primary);
+    background-color: var(--tint-strong);
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -3366,7 +4633,7 @@ body.modal-open {
     margin: 0 0 var(--space-4);
     padding: var(--space-3) var(--space-4);
     background-color: var(--bg-tertiary);
-    border: 1.5px solid var(--border-primary);
+    border: 1px solid var(--border-primary);
     border-radius: var(--radius-md);
 }
 
@@ -3377,7 +4644,7 @@ body.modal-open {
 }
 
 .dr-tab-block {
-    border: 1.5px solid var(--border-primary);
+    border: 1px solid var(--border-primary);
     border-radius: var(--radius-md);
     overflow: hidden;
 }
@@ -3389,7 +4656,7 @@ body.modal-open {
     gap: 8px;
     padding: var(--space-3) var(--space-4);
     background-color: var(--bg-tertiary);
-    border-bottom: 1.5px solid var(--border-primary);
+    border-bottom: 1px solid var(--border-primary);
     font-size: var(--font-size-sm);
     font-weight: var(--font-bold);
     color: var(--text-primary);
@@ -3441,7 +4708,7 @@ body.modal-open {
     gap: 8px;
     padding: 7px 10px;
     background-color: var(--bg-primary);
-    border: 1.5px solid var(--border-primary);
+    border: 1px solid var(--border-primary);
     border-radius: var(--radius-sm);
     cursor: pointer;
     transition: border-color var(--transition-fast), background-color var(--transition-fast);
@@ -3452,12 +4719,12 @@ body.modal-open {
 }
 
 .dr-option:has(input:checked) {
-    border-color: var(--accent, #818cf8);
-    background-color: rgba(99, 102, 241, 0.08);
+    border-color: var(--text-primary);
+    background-color: var(--tint);
 }
 
 .dr-option input[type="radio"] {
-    accent-color: var(--accent, #818cf8);
+    accent-color: var(--text-primary);
     flex-shrink: 0;
 }
 
@@ -3483,10 +4750,10 @@ body.modal-open {
 
 .dr-no-options {
     font-size: 12px;
-    color: var(--danger);
+    color: var(--text-secondary);
     padding: 7px 10px;
-    background: rgba(239, 68, 68, 0.07);
-    border: 1.5px dashed rgba(239, 68, 68, 0.4);
+    background: var(--tint);
+    border: 1px dashed var(--border-focus);
     border-radius: var(--radius-sm);
 }
 
@@ -3501,7 +4768,7 @@ body.modal-open {
     min-width: 190px;
     padding: 4px;
     background-color: var(--bg-elevated);
-    border: 2px solid var(--border-secondary);
+    border: 1px solid var(--border-secondary);
     border-radius: var(--radius-md);
     box-shadow: 0 10px 32px rgba(0, 0, 0, 0.45);
     display: none; /* hidden until opened */
@@ -3558,3 +4825,233 @@ body.modal-open {
         transform: scale(0.97);
     }
 }
+
+/* ─────────────────────────────────────────────────────────────
+   CONFLICT REPORT (تداخل زمانی)
+   Every clashing pair is listed, each labelled with which side is
+   the incoming course and which side is already in the program.
+   ───────────────────────────────────────────────────────────── */
+
+.conflict-body {
+    gap: var(--space-4);
+}
+
+.modal-content.modal-conflict {
+    max-width: 600px;
+}
+
+.conflict-legend {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+}
+
+.conflict-chip {
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-semibold);
+    padding: var(--space-1) var(--space-3);
+    border-radius: 999px;
+    border: 1px solid;
+}
+
+.conflict-chip-new {
+    border-color: var(--danger);
+    color: var(--danger);
+    background-color: var(--danger-tint);
+}
+
+.conflict-chip-old {
+    border-color: var(--border-focus);
+    color: var(--text-secondary);
+    background-color: var(--tint);
+}
+
+.conflict-groups {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.conflict-group {
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    background-color: var(--bg-tertiary);
+    overflow: hidden;
+}
+
+.conflict-group-head {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    border-bottom: 1px solid var(--border-primary);
+    background-color: var(--bg-elevated);
+}
+
+.conflict-group-name {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-bold);
+    color: var(--text-primary);
+}
+
+.conflict-group-meta {
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+}
+
+.conflict-badge {
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-semibold);
+    padding: 2px var(--space-2);
+    border-radius: var(--radius-sm);
+    border: 1px solid;
+    white-space: nowrap;
+}
+
+.conflict-badge-old {
+    border-color: var(--border-focus);
+    color: var(--text-secondary);
+    background-color: var(--tint);
+}
+
+.conflict-pairs {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-2);
+}
+
+.conflict-pair {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.conflict-pair-x {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-bold);
+    color: var(--danger);
+}
+
+.conflict-slot {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--space-2) var(--space-3);
+    border: 1.5px solid;
+    border-inline-start-width: 3px;
+    border-radius: var(--radius-sm);
+}
+
+.conflict-slot-new {
+    border-color: var(--danger);
+    border-inline-start-color: var(--danger);
+    background-color: var(--danger-tint);
+}
+
+.conflict-slot-new .conflict-slot-tag { color: var(--danger); opacity: 0.8; }
+.conflict-slot-new .conflict-slot-time { color: var(--danger); }
+
+.conflict-slot-old {
+    border-color: var(--border-primary);
+    border-inline-start-color: var(--border-focus);
+    background-color: var(--tint);
+}
+
+.conflict-slot-tag {
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+}
+
+.conflict-slot-time {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-semibold);
+    color: var(--text-primary);
+}
+
+.conflict-note {
+    font-size: var(--font-size-sm);
+    line-height: 1.8;
+    text-align: center;
+    color: var(--text-secondary);
+}
+
+.conflict-force-btn {
+    white-space: normal;
+}
+
+@media (max-width: 560px) {
+    .conflict-pair {
+        grid-template-columns: 1fr;
+    }
+
+    .conflict-pair-x {
+        text-align: center;
+    }
+}
+
+/* Origin badges: share-link import + dataset exception */
+/* Origin badges: share-link import + dataset exception */
+.course-badge.origin-badge,
+.course-badge.exception-badge {
+    background-color: var(--tint-strong);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-secondary);
+}
+
+.course-badge.exception-badge {
+    border-style: dashed;
+}
+
+/* Schedule blocks: quiet origin marks */
+.course-block-origin {
+    position: absolute;
+    top: 2px;
+    inset-inline-end: 3px;
+    font-size: 8.5px;
+    line-height: 1.4;
+    opacity: 0.85;
+    pointer-events: none;
+}
+
+.course-block-exception {
+    outline: 1.5px dashed rgba(128, 140, 158, 0.75);
+    outline-offset: -1.5px;
+}
+
+.course-block-share {
+    outline: 1.5px dotted rgba(128, 140, 158, 0.55);
+    outline-offset: -1.5px;
+}
+
+/* Summary list origin tags */
+.origin-tag-exception,
+.origin-tag-share {
+    background-color: var(--tint-strong);
+    border: 1px dashed var(--border-secondary);
+    color: var(--text-secondary);
+}
+
+.origin-tag-share {
+    border-style: dotted;
+}
+
+/* Share landing invalid warning */
+.share-invalid-warn {
+    color: var(--warning);
+    font-weight: var(--font-semibold);
+}
+
+/* Dataset-report: keep-as-exception option styling */
+.dr-option-keep {
+    border: 1px dashed var(--border-focus);
+}
+
+.dr-full-item .dr-meta-warn {
+    color: var(--warning);
+}
+

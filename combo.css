@@ -12,7 +12,7 @@
 }
 .combo-step {
     border: 1px solid var(--border-color, #2a2a2a);
-    border-radius: 12px;
+    border-radius: var(--radius-lg, 14px);
     padding: 14px 16px;
     background: var(--bg-secondary, #141414);
 }
@@ -31,8 +31,8 @@
     width: 24px;
     height: 24px;
     border-radius: 50%;
-    background: var(--primary, #6366f1);
-    color: #fff;
+    background: var(--text-primary);
+    color: var(--bg-primary);
     font-size: 13px;
     flex-shrink: 0;
 }
@@ -47,7 +47,7 @@
 .combo-search {
     width: 100%;
     padding: 9px 12px;
-    border-radius: 8px;
+    border-radius: var(--radius-sm, 6px);
     border: 1px solid var(--border-color, #2a2a2a);
     background: var(--bg-primary, #0a0a0a);
     color: var(--text-primary, #fff);
@@ -55,7 +55,7 @@
     font-size: 13.5px;
     margin-bottom: 8px;
 }
-.combo-search:focus { outline: none; border-color: var(--primary, #6366f1); }
+.combo-search:focus { outline: none; border-color: var(--text-primary); transition: border-color var(--ease-interactive); }
 .combo-search-results {
     position: absolute;
     top: 40px;
@@ -65,7 +65,7 @@
     max-height: 220px;
     overflow-y: auto;
     border: 1px solid var(--border-color, #2a2a2a);
-    border-radius: 10px;
+    border-radius: var(--radius-md, 10px);
     background: var(--bg-secondary, #141414);
     box-shadow: 0 8px 24px rgba(0,0,0,.45);
 }
@@ -78,7 +78,8 @@
     cursor: pointer;
     font-size: 13px;
 }
-.combo-search-item:hover { background: rgba(99, 102, 241, 0.12); }
+.combo-search-item { transition: background-color 140ms ease; }
+.combo-search-item:hover { background: var(--tint-strong); }
 .combo-search-item .combo-item-meta { color: var(--text-muted, #888); font-size: 11.5px; white-space: nowrap; }
 .combo-search-empty { padding: 10px 12px; font-size: 12.5px; color: var(--text-muted, #888); }
 
@@ -101,9 +102,10 @@
     gap: 6px;
     padding: 6px 10px;
     border-radius: 999px;
-    border: 1px solid rgba(99, 102, 241, 0.5);
-    background: rgba(99, 102, 241, 0.12);
+    border: 1px solid var(--border-focus);
+    background: var(--tint);
     font-size: 12.5px;
+    transition: background-color var(--ease-interactive);
 }
 .combo-chip .combo-chip-meta { color: var(--text-muted, #888); font-size: 11px; }
 .combo-chip-remove {
@@ -116,7 +118,9 @@
     font-size: 14px;
     line-height: 1;
 }
-.combo-chip-remove:hover { color: #ef4444; }
+.combo-chip-remove { transition: color var(--ease-interactive), transform var(--ease-interactive); }
+.combo-chip-remove:hover { color: var(--text-primary); }
+.combo-chip-remove:active { transform: scale(0.85); }
 
 /* Passed courses */
 .combo-passed-count {
@@ -124,7 +128,7 @@
     color: var(--text-muted, #888);
     margin-top: 8px;
 }
-.combo-passed-count.has-items { color: #10b981; }
+.combo-passed-count.has-items { color: var(--text-primary); }
 
 /* Generate row */
 .combo-gen-row {
@@ -144,13 +148,13 @@
 }
 .combo-result {
     border: 1px solid var(--border-color, #2a2a2a);
-    border-radius: 12px;
+    border-radius: var(--radius-lg, 14px);
     padding: 12px 14px;
     background: var(--bg-primary, #0a0a0a);
 }
 .combo-result.best {
-    border-color: rgba(16, 185, 129, 0.6);
-    box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.35);
+    border-color: var(--text-primary);
+    box-shadow: 0 0 0 1px var(--text-primary);
 }
 .combo-result-header {
     display: flex;
@@ -167,9 +171,9 @@
     gap: 4px;
     padding: 2px 8px;
     border-radius: 999px;
-    background: rgba(16, 185, 129, 0.15);
-    border: 1px solid rgba(16, 185, 129, 0.5);
-    color: #10b981;
+    background: var(--text-primary);
+    border: 1px solid var(--text-primary);
+    color: var(--bg-primary);
     font-size: 11px;
     font-weight: 700;
 }
@@ -185,35 +189,37 @@
     gap: 8px;
     font-size: 12.5px;
     padding: 5px 8px;
-    border-radius: 8px;
+    border-radius: var(--radius-sm, 6px);
     background: rgba(255, 255, 255, 0.03);
 }
 .combo-result-course .combo-course-meta { color: var(--text-muted, #888); font-size: 11.5px; white-space: nowrap; }
 .combo-result-actions { margin-top: 10px; display: flex; gap: 8px; }
 .combo-apply-btn {
     padding: 6px 14px;
-    border-radius: 8px;
-    border: 1px solid rgba(99, 102, 241, 0.5);
-    background: rgba(99, 102, 241, 0.15);
-    color: var(--text-primary, #fff);
+    border-radius: var(--radius-sm, 6px);
+    border: 1px solid var(--border-focus);
+    background: var(--tint);
+    color: var(--text-primary);
     font-family: inherit;
     font-size: 12.5px;
     cursor: pointer;
+    transition: transform var(--ease-interactive), background-color var(--ease-interactive);
 }
-.combo-apply-btn:hover { background: rgba(99, 102, 241, 0.28); }
+.combo-apply-btn:active { transform: scale(0.97); }
+.combo-apply-btn:hover { background: var(--tint-strong); border-color: var(--text-primary); }
 .combo-apply-btn.applied {
-    border-color: rgba(16, 185, 129, 0.5);
-    background: rgba(16, 185, 129, 0.15);
-    color: #10b981;
+    border-color: var(--border-primary);
+    background: var(--tint);
+    color: var(--text-secondary);
     cursor: default;
 }
 .combo-no-results {
     padding: 12px;
-    border-radius: 10px;
-    border: 1px dashed rgba(239, 68, 68, 0.5);
-    background: rgba(239, 68, 68, 0.06);
+    border-radius: var(--radius-md, 10px);
+    border: 1px dashed var(--danger);
+    background: var(--danger-tint, var(--tint));
     font-size: 13px;
-    color: #f87171;
+    color: var(--danger);
 }
 .combo-no-results ul { margin: 6px 0 0; padding-right: 18px; font-size: 12.5px; }
 
@@ -221,8 +227,8 @@
 .combo-passed-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
 .combo-passed-chips:empty { display: none; }
 .combo-chip.passed {
-    border-color: rgba(16, 185, 129, 0.5);
-    background: rgba(16, 185, 129, 0.1);
+    border-color: var(--border-primary);
+    background: var(--tint-strong);
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -231,8 +237,8 @@
 
 /* Summary bar cost item */
 .cost-summary-item .cost-value {
-    color: #10b981;
-    background: rgba(16, 185, 129, 0.1);
+    color: var(--text-primary);
+    background: var(--tint);
     min-width: 0;
     padding: var(--space-1) var(--space-3);
     white-space: nowrap;
@@ -265,7 +271,7 @@
     background: rgba(255, 255, 255, 0.03);
 }
 .cost-table .cost-cell-name { text-align: right; font-weight: 600; }
-.cost-table .cost-cell-total { font-weight: 700; color: #10b981; }
+.cost-table .cost-cell-total { font-weight: 700; color: var(--text-primary); }
 .cost-table tfoot td {
     font-weight: 700;
     border-top: 2px solid var(--border-color, #2a2a2a);
@@ -276,11 +282,11 @@
 .cost-note {
     margin-top: 10px;
     padding: 9px 12px;
-    border-radius: 8px;
-    border: 1px dashed rgba(245, 158, 11, 0.5);
-    background: rgba(245, 158, 11, 0.07);
+    border-radius: var(--radius-sm, 6px);
+    border: 1px dashed var(--border-focus);
+    background: var(--tint);
     font-size: 12px;
-    color: #f59e0b;
+    color: var(--text-secondary);
 }
 
 .cost-script-step .combo-step-num { font-size: 12px; }
@@ -290,7 +296,7 @@
     max-height: 220px;
     resize: vertical;
     padding: 10px 12px;
-    border-radius: 8px;
+    border-radius: var(--radius-sm, 6px);
     border: 1px solid var(--border-color, #2a2a2a);
     background: var(--bg-primary, #0a0a0a);
     color: var(--text-secondary, #a0a0a0);
@@ -301,4 +307,4 @@
     text-align: left;
     margin-bottom: 10px;
 }
-.cost-script-box:focus { outline: none; border-color: var(--primary, #6366f1); }
+.cost-script-box:focus { outline: none; border-color: var(--text-primary); transition: border-color var(--ease-interactive); }

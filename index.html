@@ -37,6 +37,25 @@
                 <h1 class="app-title">پیش‌انتخاب واحد</h1>
             </div>
 
+            <div class="header-stats" aria-label="خلاصه انتخاب">
+                <div class="summary-item">
+                    <span class="summary-label">درس:</span>
+                    <span class="summary-value" id="selectedCount">۰</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">واحد:</span>
+                    <span class="summary-value" id="totalUnits">۰</span>
+                </div>
+                <div class="summary-item summary-limit">
+                    <span class="summary-label">حد مجاز:</span>
+                    <span class="summary-value" id="limitUnits">۲۰</span>
+                </div>
+                <div class="summary-item cost-summary-item" id="costSummaryItem">
+                    <span class="summary-label">هزینه:</span>
+                    <span class="summary-value cost-value" id="totalCost">—</span>
+                </div>
+            </div>
+
             <div class="header-actions">
                 <div class="data-update" id="dataUpdate" title="آخرین به‌روزرسانی دیتای دروس">
                     <span class="update-dot"></span>
@@ -96,41 +115,47 @@
             </button>
         </section>
 
-        <!-- ===== SUMMARY + CONTROLS ===== -->
+        <!-- ===== TOOLBAR (summary moved into the header) ===== -->
         <section class="summary-controls">
-            <div class="selection-summary">
-                <div class="summary-item">
-                    <span class="summary-label">درس انتخاب شده:</span>
-                    <span class="summary-value" id="selectedCount">۰</span>
-                </div>
-                <div class="summary-item">
-                    <span class="summary-label">جمع واحد:</span>
-                    <span class="summary-value" id="totalUnits">۰</span>
-                </div>
-                <div class="summary-item summary-limit">
-                    <span class="summary-label">حد مجاز:</span>
-                    <span class="summary-value" id="limitUnits">۲۰</span>
-                </div>
-                <div class="summary-item cost-summary-item" id="costSummaryItem">
-                    <span class="summary-label">هزینه:</span>
-                    <span class="summary-value cost-value" id="totalCost">—</span>
-                </div>
-            </div>
 
             <div class="controls-wrapper">
+                <!-- All schedule outputs in one expandable menu (desktop) -->
+                <div class="menu-wrap" id="exportMenuWrap">
+                    <button class="control-btn secondary export-menu-btn" id="btnExportMenu" aria-expanded="false" aria-haspopup="true" aria-controls="exportMenuPop">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        <span>خروجی‌ها</span>
+                        <svg class="menu-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </button>
+                    <div class="menu-pop" id="exportMenuPop" role="menu" aria-label="انواع خروجی" hidden>
+                        <button type="button" class="menu-item" role="menuitem" data-export="btnExportPDF">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+                            خروجی PDF
+                        </button>
+                        <button type="button" class="menu-item" role="menuitem" data-export="btnShareLink">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+                            اشتراک لینک
+                        </button>
+                        <button type="button" class="menu-item" role="menuitem" data-export="btnCopyTable">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                            کپی برنامه
+                        </button>
+                        <button type="button" class="menu-item" role="menuitem" data-export="btnIo">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                            ورود/خروجی (JSON)
+                        </button>
+                    </div>
+                </div>
+
                 <button class="control-btn primary" id="btnAiPlan">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M12 2a7 7 0 0 1 4 12.7V17a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1v-2.3A7 7 0 0 1 12 2z"></path>
                         <line x1="9" y1="21" x2="15" y2="21"></line>
                     </svg>
                     <span>برنامه‌ریزی AI</span>
-                </button>
-                <button class="control-btn primary" id="btnComboGen">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M12 3v3m0 12v3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1M3 12h3m12 0h3M5.6 18.4l2.1-2.1m8.6-8.6 2.1-2.1"></path>
-                        <circle cx="12" cy="12" r="4"></circle>
-                    </svg>
-                    <span>تولیدکننده ترکیب</span>
                 </button>
                 <button class="control-btn primary" id="btnViewList">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -144,7 +169,7 @@
                     <span>لیست دروس</span>
                 </button>
 
-                <button class="control-btn secondary" id="btnExportPDF">
+                <button class="control-btn secondary legacy-export" id="btnExportPDF">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                         <polyline points="14 2 14 8 20 8"></polyline>
@@ -154,7 +179,7 @@
                     <span>خروجی PDF</span>
                 </button>
 
-                <button class="control-btn secondary" id="btnCopyTable">
+                <button class="control-btn secondary legacy-export" id="btnCopyTable">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                         <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
@@ -162,7 +187,7 @@
                     <span>کپی برنامه</span>
                 </button>
 
-                <button class="control-btn secondary" id="btnIo">
+                <button class="control-btn secondary legacy-export" id="btnIo">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                         <polyline points="7 10 12 15 17 10"></polyline>
@@ -171,7 +196,7 @@
                     <span>ورود/خروجی برنامه</span>
                 </button>
 
-                <button class="control-btn secondary" id="btnShareLink">
+                <button class="control-btn secondary legacy-export" id="btnShareLink">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="18" cy="5" r="3"></circle>
                         <circle cx="6" cy="12" r="3"></circle>
@@ -234,6 +259,65 @@
 
         <!-- ===== WORKSPACE: PANEL (DESKTOP) + SCHEDULE ===== -->
         <div class="workspace">
+
+            <!-- Vertical glass tool dock (desktop): every action one click away -->
+            <nav class="tool-dock" id="toolDock" aria-label="ابزارها">
+                <button type="button" class="dock-btn" id="dockViewList" title="لیست دروس انتخاب‌شده">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+                    <span class="dock-label">لیست دروس</span>
+                </button>
+                <button type="button" class="dock-btn" id="dockAiPlan" title="برنامه‌ریزی AI">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 0 1 4 12.7V17a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1v-2.3A7 7 0 0 1 12 2z"></path><line x1="9" y1="21" x2="15" y2="21"></line></svg>
+                    <span class="dock-label">برنامه‌ریزی AI</span>
+                </button>
+                <span class="dock-sep" role="separator"></span>
+                <button type="button" class="dock-btn" id="dockExportPDF" title="خروجی PDF">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+                    <span class="dock-label">خروجی PDF</span>
+                </button>
+                <button type="button" class="dock-btn" id="dockCopyTable" title="کپی برنامه">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                    <span class="dock-label">کپی برنامه</span>
+                </button>
+                <button type="button" class="dock-btn" id="dockShareLink" title="اشتراک لینک">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+                    <span class="dock-label">اشتراک لینک</span>
+                </button>
+                <button type="button" class="dock-btn" id="dockIo" title="خروجی (JSON)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                    <span class="dock-label">خروجی JSON</span>
+                </button>
+                <button type="button" class="dock-btn" id="dockImport" title="ورود برنامه (JSON)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    <span class="dock-label">ورود برنامه</span>
+                </button>
+                <button type="button" class="dock-btn" id="dockCost" title="هزینه دروس">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                    <span class="dock-label">هزینه دروس</span>
+                </button>
+                <span class="dock-sep" role="separator"></span>
+                <button type="button" class="dock-btn" id="dockCustomData" title="دیتای دلخواه">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                    <span class="dock-label">دیتای دلخواه</span>
+                </button>
+                <button type="button" class="dock-btn" id="dockValidations" title="تنظیمات ولیدیشن">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
+                    <span class="dock-label">ولیدیشن</span>
+                </button>
+                <span class="dock-sep" role="separator"></span>
+                <button type="button" class="dock-btn" id="dockUndo" title="برگشت" disabled>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path></svg>
+                    <span class="dock-label">برگشت</span>
+                </button>
+                <button type="button" class="dock-btn" id="dockRedo" title="انجام مجدد" disabled>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 7v6h-6"></path><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13"></path></svg>
+                    <span class="dock-label">انجام مجدد</span>
+                </button>
+                <button type="button" class="dock-btn dock-danger" id="dockReset" title="ریست برنامه">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                    <span class="dock-label">ریست</span>
+                </button>
+            </nav>
 
             <!-- Advanced filter drawer (opens to the right of the panel, pushes the schedule) -->
             <aside class="filter-drawer" id="filterDrawer" aria-hidden="true">
@@ -361,13 +445,6 @@
                             <line x1="9" y1="21" x2="15" y2="21"></line>
                         </svg>
                         <span>برنامهریزی AI</span>
-                    </button>
-                    <button type="button" class="bar-btn primary" id="btnComboGenM">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M12 3v3m0 12v3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1M3 12h3m12 0h3M5.6 18.4l2.1-2.1m8.6-8.6 2.1-2.1"></path>
-                            <circle cx="12" cy="12" r="4"></circle>
-                        </svg>
-                        <span>ترکیب‌ساز</span>
                     </button>
                     <button type="button" class="bar-btn" id="btnViewListM">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -707,19 +784,19 @@
         </div>
     </div>
 
-    <!-- Conflict Alert Modal -->
+    <!-- Conflict Alert Modal (هر تداخل + حل خودکار) -->
     <div class="modal-overlay" id="conflictModal">
-        <div class="modal-content modal-small">
+        <div class="modal-content modal-conflict">
             <div class="modal-header">
                 <h3 class="modal-title">تداخل زمانی</h3>
-                <button class="modal-close" id="closeConflictModal">
+                <button class="modal-close" id="closeConflictModal" aria-label="بستن">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="18" y1="6" x2="6" y2="18"></line>
                         <line x1="6" y1="6" x2="18" y2="18"></line>
                     </svg>
                 </button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body conflict-body">
                 <div class="conflict-icon">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
@@ -728,9 +805,16 @@
                     </svg>
                 </div>
                 <p class="conflict-message" id="conflictMessage"></p>
+                <div class="conflict-legend">
+                    <span class="conflict-chip conflict-chip-new">تایم درس جدید</span>
+                    <span class="conflict-chip conflict-chip-old">تایم درس موجود در برنامه</span>
+                </div>
+                <div class="conflict-groups" id="conflictGroups"></div>
+                <p class="conflict-note" id="conflictNote"></p>
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" id="btnCloseConflictModal">متوجه شدم</button>
+                <button class="btn-danger conflict-force-btn" id="btnForceAddConflict">حذف دروس متداخل و افزودن درس جدید</button>
+                <button class="btn-secondary" id="btnCloseConflictModal">انصراف</button>
             </div>
         </div>
     </div>
@@ -861,64 +945,6 @@
         </div>
     </div>
 
-    <!-- Combo Generator Modal -->
-    <div class="modal-overlay" id="comboModal">
-        <div class="modal-content modal-large combo-modal">
-            <div class="modal-header">
-                <h3 class="modal-title">تولیدکننده ترکیب برنامه</h3>
-                <button class="modal-close" id="closeComboModal">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                    </svg>
-                </button>
-            </div>
-
-            <div class="modal-body combo-body">
-                <!-- Step 1: pick desired courses -->
-                <section class="combo-step">
-                    <h4 class="combo-step-title"><span class="combo-step-num">۱</span> دروس مطلوب ترم را علامت بزنید</h4>
-                    <p class="combo-hint">از هر درس، همه گروه‌های موجود به‌عنوان جایگزین در نظر گرفته می‌شوند.</p>
-                    <div class="combo-picker">
-                        <input type="text" id="comboSearch" class="combo-search" placeholder="جستجوی درس برای افزودن..." autocomplete="off">
-                        <div class="combo-search-results" id="comboSearchResults" hidden></div>
-                    </div>
-                    <div class="combo-wanted" id="comboWanted">
-                        <!-- Chips of desired courses, filled by JS -->
-                    </div>
-                </section>
-
-                <!-- Step 2: passed courses -->
-                <section class="combo-step">
-                    <h4 class="combo-step-title"><span class="combo-step-num">۲</span> دروس پاس‌شده (اختیاری)</h4>
-                    <p class="combo-hint">دروسی که قبلاً پاس کرده‌اید علامت بزنید — در پیشنهادها و ترکیب‌ها حساب نمی‌شوند و از لیست جستجو هم حذف می‌شوند.</p>
-                    <div class="combo-passed-tools">
-                        <input type="text" id="comboPassedSearch" class="combo-search" placeholder="جستجوی درس برای علامت زدن پاس‌شده..." autocomplete="off">
-                        <div class="combo-search-results" id="comboPassedResults" hidden></div>
-                    </div>
-                    <div class="combo-passed-count" id="comboPassedCount">هیچ درسی علامت نخورده</div>
-                </section>
-
-                <!-- Step 3: generate -->
-                <section class="combo-step">
-                    <h4 class="combo-step-title"><span class="combo-step-num">۳</span> تولید ترکیب‌ها</h4>
-                    <div class="combo-gen-row">
-                        <button class="btn-primary" id="btnGenerateCombos">تولید ترکیب‌های بدون تداخل</button>
-                        <button class="btn-secondary" id="btnClearCombo">پاک کردن همه</button>
-                    </div>
-                    <div class="combo-results" id="comboResults">
-                        <!-- Results filled by JS -->
-                    </div>
-                </section>
-            </div>
-
-            <div class="modal-footer">
-                <button class="btn-secondary" id="btnCloseComboFooter">بستن</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Import/Export Modal (ورود و خروجی برنامه) -->
     <div class="modal-overlay" id="ioModal">
         <div class="modal-content modal-large io-modal">
             <div class="modal-header">
@@ -1111,6 +1137,9 @@
     <div class="toast-container" id="toastContainer"></div>
 
     <!-- ==================== SCRIPTS ==================== -->
+    <!-- GSAP: presentation-layer motion only (never business logic) -->
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <script defer src="motion.js"></script>
     <script src="combo.js"></script>
     <script src="script.js"></script>
 </body>

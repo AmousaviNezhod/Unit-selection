@@ -50,11 +50,14 @@ const CONFIG = {
     // Search settings
     INITIAL_COURSE_COUNT: 10,
 
-    // Course block palette (cycled by course index)
+    // Course identity palette: each course gets its own hue so blocks,
+    // panel cards and list rows are instantly tell-apart. Colors are tuned
+    // to sit comfortably on BOTH dark (#0a0a0a) and light (#f5f5f5) gray UI,
+    // with dark ink (#0a0a0a) on top of the chip.
     PALETTE: [
-        '#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6',
-        '#8b5cf6', '#ef4444', '#14b8a6', '#f97316', '#06b6d4',
-        '#84cc16', '#a855f7'
+        '#f5a623', '#5b8def', '#40c4aa', '#e05c8a', '#9b7bf3',
+        '#67b6f0', '#e3b341', '#6fc26f', '#e0785c', '#c288e0',
+        '#4fb8c9', '#d98f3e'
     ],
 
     // Toast duration
@@ -83,6 +86,7 @@ const state = {
     customCourses: [],      // From user-pasted HTML table
     customActive: false,    // True when custom dataset is active
     selectedCourses: [],    // Selected course IDs (code-group) of the ACTIVE schedule
+    pendingConflict: null,  // {courseId, conflicts, conflictIds, replaceIds} while the conflict modal is open
     schedules: [],          // [{ id, name, courses: [] }] — one entry per tab
     activeScheduleId: '',   // Currently shown schedule tab
     pendingShareValidations: null, // Validation overrides carried by a share link
@@ -91,6 +95,13 @@ const state = {
     prices: {},             // Course code -> unit price (from data/couresPrice.html)
     currentModalCourse: null,
     currentHours: CONFIG.HOURS, // Hours currently rendered on grid
+    // Courses intentionally KEPT in tabs although the active dataset no
+    // longer contains them (per tab). Each entry carries the full course
+    // snapshot so rendering/validation keeps working.
+    datasetExceptions: {},  // { tabId: [courseSnapshot, ...] }
+    // Where each tab's courses came from: 'dataset' (default) | 'share'
+    courseOrigins: {},      // { tabId: { courseId: true } }
+    pendingShareInvalidIds: [], // share ids absent from BOTH datasets
     currentTransposed: false, // True while the fit-mode transposed grid is rendered
     unitsWarned: false,     // To avoid repeating the >20 units toast
     degree: '',             // Selected degree level (مقطع); '' = all degrees
@@ -105,6 +116,7 @@ const state = {
         hasTime: false,         // Only courses with fixed class time
         onlyAvailable: false,   // Only courses with free capacity
         onlyFull: false,        // Only courses whose capacity is full
+        timeMode: 'range',      // Which time pane is open: 'range' | 'exact'
         sortAsc: null           // null | 'asc' | 'desc' — sort results by name
     }
 };
@@ -249,6 +261,7 @@ function saveValidationOverrides() {
 /** Is a course selectable? Capacity-full courses are locked (unless already selected) */
 function isSelectable(course) {
     if (isValidationEnabled('capacity') && !isCapacityAvailable(course)) return false;
+    if (course.isException) return true; // kept exception rows are always valid
     return state.customActive
         ? state.customCourses.some(c => getCourseId(c) === getCourseId(course))
         : true;
@@ -398,6 +411,9 @@ const elements = {
     // Conflict modal
     conflictModal: document.getElementById('conflictModal'),
     conflictMessage: document.getElementById('conflictMessage'),
+    conflictGroups: document.getElementById('conflictGroups'),
+    conflictNote: document.getElementById('conflictNote'),
+    btnForceAddConflict: document.getElementById('btnForceAddConflict'),
     closeConflictModal: document.getElementById('closeConflictModal'),
     btnCloseConflictModal: document.getElementById('btnCloseConflictModal'),
 
@@ -494,6 +510,32 @@ function escapeHtml(str) {
         .replace(/'/g, '&#039;');
 }
 
+// ── Shared perf helpers ────────────────────────────────────────
+/** Trailing debounce (default 120ms): fires once after the burst ends */
+function debounceFn(fn, wait = 120) {
+    let t = null;
+    const wrapped = (...args) => {
+        clearTimeout(t);
+        t = setTimeout(() => { t = null; fn(...args); }, wait);
+    };
+    wrapped.cancel = () => { clearTimeout(t); t = null; };
+    return wrapped;
+}
+
+/** Coalesce bursts (resize/scroll) into one call per animation frame */
+function rafThrottle(fn) {
+    let queued = false, lastArgs = null;
+    return (...args) => {
+        lastArgs = args;
+        if (queued) return;
+        queued = true;
+        requestAnimationFrame(() => {
+            queued = false;
+            fn(...lastArgs);
+        });
+    };
+}
+
 /** Parse "10:30" -> 10.5 */
 function parseTime(timeStr) {
     const [hours, minutes = 0] = timeStr.split(':').map(Number);
@@ -547,6 +589,67 @@ function checkConflict(course1, course2) {
     return { hasConflict: false };
 }
 
+/**
+ * EVERY slot-vs-slot clash between `course` and the courses already in the
+ * program — one entry per clashing pair, so a two-session course reports all
+ * of its clashes (شنبه AND یکشنبه) instead of only the first one.
+ *
+ * Each entry: { other, day, newSlot (درس جدید), oldSlot (از قبل در برنامه) }
+ */
+function collectConflicts(course, againstCourses) {
+    const conflicts = [];
+    const courseId = getCourseId(course);
+    (againstCourses || []).forEach(other => {
+        if (!other || getCourseId(other) === courseId) return;
+        const newSlots = course.schedule || [];
+        const oldSlots = other.schedule || [];
+        newSlots.forEach(newSlot => {
+            oldSlots.forEach(oldSlot => {
+                if (!slotsConflict(newSlot, oldSlot)) return;
+                conflicts.push({ other, day: newSlot.day, newSlot, oldSlot });
+            });
+        });
+    });
+    return conflicts;
+}
+
+/** Group conflict pairs by the already-selected course they clash with */
+function groupConflicts(conflicts) {
+    const groups = [];
+    const index = new Map();
+    (conflicts || []).forEach(cf => {
+        const id = getCourseId(cf.other);
+        if (!index.has(id)) {
+            const group = { id, course: cf.other, pairs: [] };
+            index.set(id, group);
+            groups.push(group);
+        }
+        index.get(id).pairs.push(cf);
+    });
+    return groups;
+}
+
+/** Unique ids of the courses blocking `conflicts`, in first-seen order */
+function blockedCourseIds(conflicts) {
+    const ids = [];
+    const seen = new Set();
+    (conflicts || []).forEach(cf => {
+        const id = getCourseId(cf.other);
+        if (seen.has(id)) return;
+        seen.add(id);
+        ids.push(id);
+    });
+    return ids;
+}
+
+/** "شنبه ۱۰:۳۰-۱۲:۰۰ (فرد)" — one readable class slot */
+function formatSlotLabel(slot) {
+    if (!slot) return '';
+    const parity = slotParityLabel(slot);
+    const range = `${toPersianTime(slot.start)}-${toPersianTime(slot.end)}`;
+    return `${slot.day} ${range}${parity ? ` (${parity})` : ''}`;
+}
+
 /** Persian label for a slot's week parity (زوج/فرد) — null when none */
 function slotParityLabel(slot) {
     if (!slot || slot.cadence !== 'biweekly') return null;
@@ -560,12 +663,95 @@ function getCourseId(course) {
     return `${course.code}-${course.group}`;
 }
 
+// O(1) lookup indexes, rebuilt only when the underlying dataset changes
+// (NOT on every call — the old linear .find() ran inside hot loops).
+let courseIndexById = new Map();     // active dataset (custom or default)
+let courseIndexKey = '';             // dataset + degree the index was built for
+
+function rebuildCourseIndex() {
+    const key = (state.customActive ? 'c' : 'd') + '|' + state.degree;
+    if (key === courseIndexKey) return; // nothing changed
+    courseIndexById = new Map();
+    getActiveCourses().forEach(c => courseIndexById.set(getCourseId(c), c));
+    courseIndexKey = key;
+}
+
 function findCourseById(courseId) {
-    return getActiveCourses().find(c => getCourseId(c) === courseId);
+    rebuildCourseIndex();
+    const hit = courseIndexById.get(courseId);
+    if (hit) return hit;
+    // Fall back to the active tab's kept exceptions (old-dataset courses)
+    const tabId = state.activeScheduleId;
+    if (tabId) {
+        const ex = getTabExceptions(tabId).find(c => getCourseId(c) === courseId);
+        if (ex) return { ...ex, isException: true };
+    }
+    return null;
+}
+
+/** Resolve an id inside a SPECIFIC tab (dataset first, then its exceptions) */
+function findCourseInTabById(tabId, courseId) {
+    const active = state.customActive
+        ? state.customCourses.find(c => getCourseId(c) === courseId)
+        : state.defaultCourses.find(c => getCourseId(c) === courseId);
+    if (active) return active;
+    const ex = getTabExceptions(tabId).find(c => getCourseId(c) === courseId);
+    return ex ? { ...ex, isException: true } : null;
 }
 
 function findInListCourses(courseId) {
     return getListCourses().find(c => getCourseId(c) === courseId);
+}
+
+// ── Dataset exceptions: courses kept from an older dataset ──
+// These are NOT in the active dataset anymore but the user chose to
+// keep them in a tab. They render, validate and export like any course.
+
+/** Snapshot a course object for the exceptions store */
+function snapshotCourse(course) {
+    return { ...course, schedule: course.schedule.map(sl => ({ ...sl })) };
+}
+
+/** Get the exception course list of one tab */
+function getTabExceptions(tabId) {
+    return state.datasetExceptions[tabId] || [];
+}
+
+/** Persist exceptions + origins next to the schedules */
+function saveDatasetMeta() {
+    try {
+        localStorage.setItem('unisel_dataset_exceptions', JSON.stringify(state.datasetExceptions));
+        localStorage.setItem('unisel_course_origins', JSON.stringify(state.courseOrigins));
+    } catch (e) { console.error('Error saving dataset meta:', e); }
+}
+
+/** Load persisted exceptions + origins */
+function loadDatasetMeta() {
+    try {
+        const ex = JSON.parse(localStorage.getItem('unisel_dataset_exceptions') || 'null');
+        if (ex && typeof ex === 'object') state.datasetExceptions = ex;
+        const or = JSON.parse(localStorage.getItem('unisel_course_origins') || 'null');
+        if (or && typeof or === 'object') state.courseOrigins = or;
+    } catch (e) { /* corrupt storage → ignore */ }
+}
+
+/** Prune exceptions whose course NOW exists in the active dataset (it healed) */
+function pruneHealedExceptions(tab) {
+    const ex = getTabExceptions(tab.id);
+    if (!ex.length) return;
+    const healed = ex.filter(c => findCourseById(getCourseId(c)));
+    if (!healed.length) return;
+    // Heal: real dataset rows replace the snapshot inside the tab's courses
+    const healedIds = new Set(healed.map(c => getCourseId(c)));
+    tab.courses = tab.courses.map(id => healedIds.has(id) ? id : id);
+    state.datasetExceptions[tab.id] = ex.filter(c => !healedIds.has(getCourseId(c)));
+    if (!state.datasetExceptions[tab.id].length) delete state.datasetExceptions[tab.id];
+}
+
+/** Deterministic gray-blue accent for exception courses (visually distinct) */
+function colorForException(course) {
+    const h = [...getCourseId(course)].reduce((a, ch) => a + ch.charCodeAt(0), 0);
+    return '#8a94a6'; // quiet slate — clearly "not from the current dataset"
 }
 
 /** Format number with Persian digits */
@@ -777,6 +963,7 @@ async function loadCourses() {
             const courses = parseCourses(text);
             if (courses.length > 0) {
                 state.defaultCourses = courses;
+                invalidateCourseIndex();
                 console.log(`Loaded ${courses.length} courses from ${url}`);
                 return;
             }
@@ -785,6 +972,7 @@ async function loadCourses() {
         }
     }
     state.defaultCourses = [];
+    invalidateCourseIndex();
     showToast('خطا در بارگذاری فایل دیتا. صفحه را از طریق وب‌سرور باز کنید (نه file://)', 'error');
 }
 
@@ -825,53 +1013,130 @@ function buildFilterFieldsHtml() {
         `<option value="${h}">${toPersianNumber(h)}:۰۰</option>`
     ).join('');
 
-    const unitOpts = [1, 2, 3, 4].map(u =>
-        `<option value="${u}">${toPersianNumber(u)}</option>`
+    const icon = (path) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">${path}</svg>`;
+    const IC = {
+        degree:  icon('<path d="M22 10L12 5 2 10l10 5 10-5z"></path><path d="M6 12v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"></path>'),
+        clock:   icon('<circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline>'),
+        prof:    icon('<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle>'),
+        group:   icon('<line x1="4" y1="9" x2="20" y2="9"></line><line x1="4" y1="15" x2="20" y2="15"></line><line x1="10" y1="3" x2="8" y2="21"></line><line x1="16" y1="3" x2="14" y2="21"></line>'),
+        units:   icon('<path d="M12 3v18M5 7l7-4 7 4M5 12l7-4 7 4M5 17l7-4 7 4"></path>'),
+        sort:    icon('<path d="M3 6h13M3 12h9M3 18h5"></path>'),
+        chevron: icon('<polyline points="6 9 12 15 18 9"></polyline>')
+    };
+
+    const hourSelect = (kind, label) => `
+        <select class="filter-slider-select" data-filter="${kind}" aria-label="${label}">
+            <option value="">—</option>${hourOpts}
+        </select>`;
+
+    const clockPath = '<circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline>';
+    const clockSvg = (cls) => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">${clockPath}</svg>`;
+
+    // Dual-thumb range slider + hour pills; the native selects stay hidden
+    // in the DOM so syncFilterBar()/bindFilterBar() keep working unchanged.
+    const timeRangePane = `
+        <div class="filter-time-pane" data-role="timeRange">
+            <div class="filter-slider" data-role="rangeSlider">
+                <input type="range" min="7" max="20" step="1" data-slider="lo" aria-label="از ساعت">
+                <input type="range" min="7" max="20" step="1" data-slider="hi" aria-label="تا ساعت">
+            </div>
+            <div class="filter-slider-outputs">
+                <span class="filter-slider-out" data-role="outLo">${clockSvg()}<span data-role="outLoVal">—</span></span>
+                <span class="filter-slider-out" data-role="outHi">${clockSvg()}<span data-role="outHiVal">—</span></span>
+            </div>
+            ${hourSelect('startHour', 'از ساعت')}
+            ${hourSelect('endHour', 'تا ساعت')}
+        </div>`;
+
+    const timeExactPane = `
+        <div class="filter-time-pane" data-role="timeExact" hidden>
+            <div class="filter-slider single" data-role="exactSlider">
+                <input type="range" min="7" max="20" step="1" data-slider="exact" aria-label="ساعت مشخص">
+            </div>
+            <div class="filter-slider-outputs">
+                <span class="filter-slider-out" data-role="outExact">${clockSvg()}<span data-role="outExactVal">—</span></span>
+            </div>
+            ${hourSelect('exactHour', 'ساعت مشخص')}
+        </div>`;
+
+    const unitSeg = [1, 2, 3, 4].map(u =>
+        `<button type="button" class="filter-seg" data-filter="unitSeg" data-value="${u}">${toPersianNumber(u)}</button>`
     ).join('');
 
     return `
-        <div class="filter-detail-grid">
-            <label class="filter-field">
-                <span>مقطع</span>
-                <select data-filter="degree"><option value="">همه مقاطع</option>
-                    ${getDegreeOptions().map(d =>
-                        `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join('')}
-                </select>
-            </label>
-            <label class="filter-field">
-                <span>از ساعت</span>
-                <select data-filter="startHour"><option value="">—</option>${hourOpts}</select>
-            </label>
-            <label class="filter-field">
-                <span>تا ساعت</span>
-                <select data-filter="endHour"><option value="">—</option>${hourOpts}</select>
-            </label>
-            <label class="filter-field">
-                <span>ساعت مشخص</span>
-                <select data-filter="exactHour"><option value="">—</option>${hourOpts}</select>
-            </label>
-            <label class="filter-field">
-                <span>استاد</span>
-                <select data-filter="professor"><option value="">همه</option>
-                    ${getProfessorOptions().map(p =>
-                        `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('')}
-                </select>
-            </label>
-            <label class="filter-field">
-                <span>گروه</span>
-                <input type="text" data-filter="group" placeholder="مثلاً ۴۰">
-            </label>
-            <label class="filter-field filter-field-wide">
-                <span>واحد</span>
-                <select data-filter="unitsMin">
-                    <option value="">همه</option>
-                    ${unitOpts}
-                    <option value="3plus">۳ به بالا</option>
-                </select>
-            </label>
+        <div class="filter-groups">
+            <section class="filter-group">
+                <h5 class="filter-group-title">${IC.clock} بازه‌ی زمانی کلاس</h5>
+                <div class="filter-time-modes" role="group" aria-label="حالت فیلتر زمان">
+                    <button type="button" class="filter-seg filter-time-mode" data-time-mode="range">بازه‌ی ساعت</button>
+                    <button type="button" class="filter-seg filter-time-mode" data-time-mode="exact">ساعت مشخص</button>
+                </div>
+                ${timeRangePane}
+                ${timeExactPane}
+            </section>
+
+            <section class="filter-group">
+                <h5 class="filter-group-title">${IC.prof} استاد، مقطع و گروه</h5>
+                <div class="filter-detail-grid">
+                    <label class="filter-field">
+                        <span>مقطع</span>
+                        <span class="filter-select-wrap">
+                            ${IC.degree}
+                            <select data-filter="degree"><option value="">همه مقاطع</option>
+                                ${getDegreeOptions().map(d =>
+                                    `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join('')}
+                            </select>
+                            ${IC.chevron}
+                        </span>
+                    </label>
+                    <label class="filter-field">
+                        <span>استاد</span>
+                        <span class="filter-select-wrap">
+                            ${IC.prof}
+                            <select data-filter="professor"><option value="">همه</option>
+                                ${getProfessorOptions().map(p =>
+                                    `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('')}
+                            </select>
+                            ${IC.chevron}
+                        </span>
+                    </label>
+                    <label class="filter-field">
+                        <span>شماره گروه</span>
+                        <span class="filter-select-wrap">
+                            ${IC.group}
+                            <input type="text" inputmode="numeric" data-filter="group" placeholder="مثلاً ۴۰">
+                        </span>
+                    </label>
+                </div>
+            </section>
+
+            <section class="filter-group">
+                <h5 class="filter-group-title">${IC.units} تعداد واحد</h5>
+                <div class="filter-unit-seg" role="group" aria-label="تعداد واحد">
+                    <button type="button" class="filter-seg" data-filter="unitSeg" data-value="">همه</button>
+                    ${unitSeg}
+                    <button type="button" class="filter-seg" data-filter="unitSeg" data-value="3plus">۳+</button>
+                </div>
+            </section>
+
+            <section class="filter-group">
+                <h5 class="filter-group-title">${IC.sort} ظرفیت</h5>
+                <div class="filter-row filter-capacity-row">
+                    <button type="button" class="filter-chip" data-filter="onlyAvailable">ظرفیت آزاد</button>
+                    <button type="button" class="filter-chip" data-filter="onlyFull">ظرفیت پر</button>
+                </div>
+            </section>
         </div>
     `;
 }
+
+/** Shared week-strip markup (mobile bar + desktop drawer) */
+const WEEK_STRIP_HTML = () =>
+    `<div class="filter-week" role="group" aria-label="روزهای هفته">${
+        CONFIG.DAYS.map(d =>
+            `<button type="button" class="filter-chip" data-filter="day" data-value="${d}">${d}</button>`
+        ).join('')
+    }</div>`;
 
 /**
  * Build the filter bar markup (identical for panel + mobile).
@@ -883,6 +1148,7 @@ function buildFilterBarHtml() {
         `<button type="button" class="filter-chip" data-filter="day" data-value="${d}">${d}</button>`
     ).join('');
 
+
     return `
         <div class="filter-row filter-row-main">
             <button type="button" class="filter-chip filter-toggle" data-filter="toggle" title="فیلترهای پیشرفته">
@@ -892,19 +1158,16 @@ function buildFilterBarHtml() {
                 فیلتر
                 <span class="filter-badge hidden" data-role="badge">۰</span>
             </button>
-            ${dayChips}
-            <button type="button" class="filter-chip" data-filter="onlyAvailable">ظرفیت آزاد</button>
-            <button type="button" class="filter-chip" data-filter="onlyFull">ظرفیت پر</button>
-            <button type="button" class="filter-chip" data-filter="sort" title="مرتب‌سازی بر اساس نام درس">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M3 6h13M3 12h9M3 18h5"></path>
-                </svg>
-                <span data-role="sort-label">مرتب‌سازی</span>
-            </button>
+            ${WEEK_STRIP_HTML()}
+            <div class="filter-unit-seg filter-sort-seg" role="group" aria-label="مرتب‌سازی نتایج">
+                <button type="button" class="filter-seg" data-filter="sortSeg" data-value="">پیش‌فرض</button>
+                <button type="button" class="filter-seg" data-filter="sortSeg" data-value="asc">نام ↑</button>
+                <button type="button" class="filter-seg" data-filter="sortSeg" data-value="desc">نام ↓</button>
+            </div>
             <button type="button" class="filter-chip filter-clear hidden" data-filter="clear">حذف فیلترها ✕</button>
         </div>
 
-        <div class="filter-details hidden" data-role="details">
+        <div class="filter-details" data-role="details">
             ${buildFilterFieldsHtml()}
         </div>
     `;
@@ -950,6 +1213,65 @@ function syncFilterBar(bar) {
     setVal('[data-filter="endHour"]', f.endHour);
     setVal('[data-filter="exactHour"]', f.exactHour);
     setVal('[data-filter="unitsMin"]', f.units);
+
+    // Range slider: thumbs + filled track + hour pills mirror the state
+    const loInput = bar.querySelector('[data-slider="lo"]');
+    const hiInput = bar.querySelector('[data-slider="hi"]');
+    if (loInput && hiInput) {
+        const sliderBox = loInput.closest('.filter-slider');
+        const lo = f.startHour != null ? f.startHour : 7;
+        const hi = f.endHour != null ? f.endHour : 20;
+        if (document.activeElement !== loInput) loInput.value = lo;
+        if (document.activeElement !== hiInput) hiInput.value = hi;
+        if (sliderBox) {
+            sliderBox.style.setProperty('--lo', String(((lo - 7) / 13) * 100));
+            sliderBox.style.setProperty('--hi', String(((hi - 7) / 13) * 100));
+        }
+        const outLo = bar.querySelector('[data-role="outLo"]');
+        const outHi = bar.querySelector('[data-role="outHi"]');
+        const loVal = bar.querySelector('[data-role="outLoVal"]');
+        const hiVal = bar.querySelector('[data-role="outHiVal"]');
+        const loSet = f.startHour != null;
+        const hiSet = f.endHour != null;
+        if (loVal) loVal.textContent = loSet ? `${toPersianNumber(lo)}:۰۰` : '—';
+        if (hiVal) hiVal.textContent = hiSet ? `${toPersianNumber(hi)}:۰۰` : '—';
+        outLo?.classList.toggle('is-empty', !loSet);
+        outHi?.classList.toggle('is-empty', !hiSet);
+    }
+
+    // Exact-hour slider
+    const exInput = bar.querySelector('[data-slider="exact"]');
+    if (exInput) {
+        const exBox = exInput.closest('.filter-slider');
+        if (document.activeElement !== exInput) exInput.value = f.exactHour != null ? f.exactHour : 7;
+        if (exBox) {
+            const v = f.exactHour != null ? f.exactHour : 7;
+            exBox.style.setProperty('--hi', String(((v - 7) / 13) * 100));
+        }
+        const exVal = bar.querySelector('[data-role="outExactVal"]');
+        if (exVal) exVal.textContent = f.exactHour != null ? `${toPersianNumber(f.exactHour)}:۰۰` : '—';
+        bar.querySelector('[data-role="outExact"]')?.classList.toggle('is-empty', f.exactHour == null);
+    }
+
+    // Segmented units control: highlight the active pill
+    bar.querySelectorAll('[data-filter="unitSeg"]').forEach(seg => {
+        seg.classList.toggle('active', String(f.units ?? '') === seg.dataset.value);
+    });
+
+    // Sort segmented control
+    bar.querySelectorAll('[data-filter="sortSeg"]').forEach(seg => {
+        seg.classList.toggle('active', (f.sortAsc || '') === seg.dataset.value);
+    });
+
+    // Time mode: range vs exact — active pill + which pane is visible
+    const exactActive = f.exactHour != null || f.timeMode === 'exact';
+    bar.querySelectorAll('[data-time-mode]').forEach(seg => {
+        seg.classList.toggle('active', exactActive === (seg.dataset.timeMode === 'exact'));
+    });
+    const rangePane = bar.querySelector('[data-role="timeRange"]');
+    const exactPane = bar.querySelector('[data-role="timeExact"]');
+    if (rangePane) rangePane.hidden = exactActive;
+    if (exactPane) exactPane.hidden = !exactActive;
     // Degree is a global (state.degree), not part of state.filters
     const deg = bar.querySelector('[data-filter="degree"]');
     if (deg && document.activeElement !== deg) deg.value = state.degree;
@@ -978,18 +1300,13 @@ function buildFilterDrawerHtml() {
     ).join('');
 
     return `
-        <div class="filter-row filter-row-main">
-            ${dayChips}
-        </div>
+        ${WEEK_STRIP_HTML()}
         <div class="filter-row">
-            <button type="button" class="filter-chip" data-filter="onlyAvailable">ظرفیت آزاد</button>
-            <button type="button" class="filter-chip" data-filter="onlyFull">ظرفیت پر</button>
-            <button type="button" class="filter-chip" data-filter="sort" title="مرتب‌سازی بر اساس نام درس">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M3 6h13M3 12h9M3 18h5"></path>
-                </svg>
-                <span data-role="sort-label">مرتب‌سازی</span>
-            </button>
+            <div class="filter-unit-seg filter-sort-seg" role="group" aria-label="مرتب‌سازی نتایج">
+                <button type="button" class="filter-seg" data-filter="sortSeg" data-value="">پیش‌فرض</button>
+                <button type="button" class="filter-seg" data-filter="sortSeg" data-value="asc">نام ↑</button>
+                <button type="button" class="filter-seg" data-filter="sortSeg" data-value="desc">نام ↓</button>
+            </div>
             <button type="button" class="filter-chip filter-clear hidden" data-filter="clear">حذف فیلترها ✕</button>
         </div>
         <div class="filter-details" data-role="details">
@@ -1018,17 +1335,20 @@ function isFilterDrawerOpen() {
     return elements.filterDrawer.classList.contains('open');
 }
 
+/** One shared debounced refresher for the group-number text input */
+const debouncedGroupRefresh = debounceFn(() => refreshLists(), 160);
+
 /** Wire events on a filter bar container (called once per bar) */
 function bindFilterBar(bar) {
     if (!bar) return;
 
     bar.addEventListener('click', e => {
-        const btn = e.target.closest('[data-filter]');
+        const btn = e.target.closest('[data-filter], [data-time-mode]');
         if (!btn) return;
         const kind = btn.dataset.filter;
 
         if (kind === 'toggle') {
-            bar.querySelector('[data-role="details"]').classList.toggle('hidden');
+            bar.querySelector('[data-role="details"]').classList.toggle('open');
             btn.classList.toggle('open');
             return;
         }
@@ -1037,14 +1357,40 @@ function bindFilterBar(bar) {
             state.filters = {
                 days: new Set(), startHour: null, endHour: null,
                 exactHour: null, professor: '', units: null,
-                group: '', hasTime: false, onlyAvailable: false, onlyFull: false, sortAsc: null
+                group: '', hasTime: false, onlyAvailable: false, onlyFull: false,
+                timeMode: 'range', sortAsc: null
             };
             syncFilterBars();
             refreshLists();
             return;
         }
 
-        if (kind === 'day') {
+        if (kind === 'unitSeg') {
+            // Segmented units pill: '', '1'..'4', '3plus'
+            const v = btn.dataset.value;
+            state.filters.units = v === '' ? null : v === '3plus' ? '3plus' : parseInt(v, 10);
+        } else if (kind === 'sortSeg') {
+            state.filters.sortAsc = btn.dataset.value || null;
+        } else if (kind === 'timeMode' || btn.dataset.timeMode) {
+            // Switching time mode clears the other mode's values (they were exclusive anyway)
+            const wantExact = btn.dataset.timeMode === 'exact';
+            state.filters.timeMode = wantExact ? 'exact' : 'range';
+            if (wantExact) {
+                state.filters.startHour = null;
+                state.filters.endHour = null;
+            } else {
+                state.filters.exactHour = null;
+            }
+            bar.querySelectorAll('[data-time-mode]').forEach(seg =>
+                seg.classList.toggle('active', seg === btn));
+            const rangePane = bar.querySelector('[data-role="timeRange"]');
+            const exactPane = bar.querySelector('[data-role="timeExact"]');
+            if (rangePane) rangePane.hidden = wantExact;
+            if (exactPane) exactPane.hidden = !wantExact;
+            syncFilterBars();
+            refreshLists();
+            return;
+        } else if (kind === 'day') {
             const d = btn.dataset.value;
             state.filters.days.has(d) ? state.filters.days.delete(d) : state.filters.days.add(d);
         } else if (kind === 'hasTime') {
@@ -1103,6 +1449,7 @@ function bindFilterBar(bar) {
         else if (kind === 'degree') {
             // Same data source as the freshness-modal select — keep both in sync
             state.degree = raw;
+            invalidateCourseIndex();
             saveDegree(state.degree);
             elements.degreeSelect.value = state.degree;
             rebuildFilterBars(); // professor dropdown + degree options follow
@@ -1110,6 +1457,54 @@ function bindFilterBar(bar) {
 
         syncFilterBars();
         refreshLists();
+    });
+
+    // Range slider: one handler drives both thumbs (crossover swaps roles)
+    bar.addEventListener('input', e => {
+        const sl = e.target.closest('[data-slider="lo"], [data-slider="hi"]');
+        if (!sl) return;
+        const box = sl.closest('.filter-slider');
+        const loInput = bar.querySelector('[data-slider="lo"]');
+        const hiInput = bar.querySelector('[data-slider="hi"]');
+        const toState = v => v === 20 ? null : v; // full span = no filter
+        const paint = () => {
+            let lo = parseInt(loInput.value, 10);
+            let hi = parseInt(hiInput.value, 10);
+            // Clamp: the dragged thumb stops at the other one (no crossing)
+            if (sl === loInput && lo > hi) { loInput.value = hi; lo = hi; }
+            else if (sl === hiInput && hi < lo) { hiInput.value = lo; hi = lo; }
+            box.style.setProperty('--lo', String(((lo - 7) / 13) * 100));
+            box.style.setProperty('--hi', String(((hi - 7) / 13) * 100));
+            const loVal = bar.querySelector('[data-role="outLoVal"]');
+            const hiVal = bar.querySelector('[data-role="outHiVal"]');
+            if (loVal) loVal.textContent = `${toPersianNumber(lo)}:۰۰`;
+            if (hiVal) hiVal.textContent = `${toPersianNumber(hi)}:۰۰`;
+            bar.querySelector('[data-role="outLo"]')?.classList.remove('is-empty');
+            bar.querySelector('[data-role="outHi"]')?.classList.remove('is-empty');
+            state.filters.startHour = lo === 7 ? null : lo;  // rightmost = no bound
+            state.filters.endHour = toState(hi);
+        };
+        paint();
+        syncFilterBars();
+        refreshLists();
+    });
+
+    // Exact slider: paint thumb + pill live, commit via the hidden select
+    bar.addEventListener('input', e => {
+        const sl = e.target.closest('[data-slider="exact"]');
+        if (!sl) return;
+        const box = sl.closest('.filter-slider');
+        const v = parseInt(sl.value, 10);
+        box.style.setProperty('--hi', String(((v - 7) / 13) * 100));
+        const exVal = bar.querySelector('[data-role="outExactVal"]');
+        if (exVal) exVal.textContent = `${toPersianNumber(v)}:۰۰`;
+        bar.querySelector('[data-role="outExact"]')?.classList.remove('is-empty');
+        const twin = bar.querySelector('select[data-filter="exactHour"]');
+        const wanted = v === 7 ? '' : String(v); // leftmost = no filter
+        if (twin && twin.value !== wanted) {
+            twin.value = wanted;
+            twin.dispatchEvent(new Event('change', { bubbles: true }));
+        }
     });
 
     bar.addEventListener('input', e => {
@@ -1131,6 +1526,8 @@ function bindFilterBar(bar) {
             const twin = other.querySelector(`[data-filter="${kind}"]`);
             if (twin && document.activeElement !== twin) twin.value = el.value;
         }
+        // Group text: debounce the list refresh (typing "40" = one render, not two)
+        if (kind === 'group') { debouncedGroupRefresh(); return; }
         refreshLists();
     });
 }
@@ -1335,6 +1732,10 @@ function updateUndoRedoButtons() {
     const canRedo = !!h && h.pointer < h.stack.length - 1;
     [elements.btnUndo, elements.btnUndoM].forEach(b => { if (b) b.disabled = !canUndo; });
     [elements.btnRedo, elements.btnRedoM].forEach(b => { if (b) b.disabled = !canRedo; });
+    const dockUndo = document.getElementById('dockUndo');
+    const dockRedo = document.getElementById('dockRedo');
+    if (dockUndo) dockUndo.disabled = !canUndo;
+    if (dockRedo) dockRedo.disabled = !canRedo;
 }
 
 /** Slots of the removed group → ghost trail blocks (chess-like "came from") */
@@ -1456,6 +1857,7 @@ function switchSchedule(id) {
     renderSchedule();
     renderScheduleTabs();
     updateUndoRedoButtons();
+    if (window.Motion) Motion.tabSwap(elements.scheduleBody);
 }
 
 /** Delete a tab; never the last one; switch to the first remaining when needed */
@@ -1854,6 +2256,13 @@ function courseCardHtml(course) {
     const badge = capacityFull
         ? '<span class="course-badge full-badge">ظرفیت پر</span>'
         : '';
+    // Origin labels: share-link import or kept exception (not from active dataset)
+    const shareBadge = isShareOrigin(state.activeScheduleId, courseId)
+        ? '<span class="course-badge origin-badge" title="این درس با لینک اشتراک وارد شده است">🔗 با لینک شیر</span>'
+        : '';
+    const exBadge = course.isException
+        ? '<span class="course-badge exception-badge" title="این درس در دیتای فعلی نیست — از دیتای قبلی نگه داشته شده">⭯ استثنا</span>'
+        : '';
 
     // Another group of THIS course is on the schedule → offer a swap
     // (with the capacity rule OFF, full groups are valid swap targets too)
@@ -1871,10 +2280,13 @@ function courseCardHtml(course) {
             ? `<button class="btn-add-course" data-course-id="${courseId}" ${course.schedule.length ? '' : 'data-no-time="1"'}>+ افزودن به برنامه</button>`
             : `<button class="btn-add-course" disabled>ظرفیت تکمیل</button>`);
 
+    // Identity stripe: the card carries the same color as its schedule blocks
+    const accent = course.color || (course.isException ? colorForException(course) : 'var(--border-focus)');
+
     return `
-        <div class="course-result ${selectable ? '' : 'disabled'}" data-course-id="${courseId}">
+        <div class="course-result ${selectable ? '' : 'disabled'}" data-course-id="${courseId}" style="--course-accent: ${accent}">
             <div class="course-result-header">
-                <span class="course-result-name">${escapeHtml(course.name)} ${badge}</span>
+                <span class="course-result-name"><span class="course-dot" aria-hidden="true"></span>${escapeHtml(course.name)} ${badge}${shareBadge}${exBadge}</span>
                 <span class="course-result-code">${toPersianNumber(course.code)}</span>
             </div>
             <div class="course-result-meta">
@@ -1892,24 +2304,36 @@ function courseCardHtml(course) {
     `;
 }
 
+// Event delegation: ONE listener per list container handles every card
+// button (add/remove/swap), including buttons inside future renders —
+// the old code attached ~1300 listeners per re-render.
 function bindCardButtons(container) {
-    container.querySelectorAll('.btn-add-course[data-course-id]').forEach(btn => {
-        btn.addEventListener('click', (e) => {
+    if (!container || container.dataset.delegated) return;
+    container.dataset.delegated = '1';
+
+    container.addEventListener('click', (e) => {
+        const rmBtn = e.target.closest('.selected-item-remove[data-course-id]');
+        if (rmBtn) {
+            removeCourse(rmBtn.dataset.courseId);
+            return;
+        }
+        const addBtn = e.target.closest('.btn-add-course[data-course-id]');
+        if (addBtn) {
             e.stopPropagation();
-            const courseId = btn.dataset.courseId;
+            const courseId = addBtn.dataset.courseId;
             if (state.selectedCourses.includes(courseId)) {
                 removeCourse(courseId);
             } else {
                 addCourse(courseId);
             }
-        });
-    });
-    // Swap buttons: replace the selected group with this card's group
-    container.querySelectorAll('.btn-swap-group[data-swap-to]').forEach(btn => {
-        btn.addEventListener('click', (e) => {
+            return;
+        }
+        // Swap buttons: replace the selected group with this card's group
+        const swapBtn = e.target.closest('.btn-swap-group[data-swap-to]');
+        if (swapBtn) {
             e.stopPropagation();
-            swapCourseGroup(btn.dataset.swapFrom, btn.dataset.swapTo);
-        });
+            swapCourseGroup(swapBtn.dataset.swapFrom, swapBtn.dataset.swapTo);
+        }
     });
 }
 
@@ -1980,7 +2404,46 @@ function renderPanelList() {
     }
 
     elements.panelList.innerHTML = list.map(courseCardHtml).join('');
+    // Highlight cards already in the plan with their own accent ring
+    elements.panelList.querySelectorAll('.course-result[data-course-id]').forEach(card => {
+        if (state.selectedCourses.includes(card.dataset.courseId)) card.classList.add('selected-card');
+    });
     bindCardButtons(elements.panelList);
+}
+
+/**
+ * Targeted selection-state update: re-patch ONLY the cards whose visual
+ * state actually changed (the touched course + its same-code variants that
+ * offer a swap), instead of re-rendering the whole 1282-card list.
+ * Falls back to nothing — callers keep their full refresh for structural
+ * changes (filters, dataset swap, tab switch).
+ */
+function patchCardSelectionState(courseId) {
+    const touched = [];
+    const course = findCourseById(courseId);
+    if (course) touched.push(course);
+    // Same-code variants swap their button/swap-row, so patch them too
+    if (course) {
+        getListCourses().forEach(c => { if (c.code === course.code && c !== course) touched.push(c); });
+    }
+    if (!touched.length) return false;
+
+    let patched = 0;
+    [elements.panelList, elements.resultsList].forEach(host => {
+        if (!host) return;
+        touched.forEach(c => {
+            const card = host.querySelector(`.course-result[data-course-id="${CSS.escape(getCourseId(c))}"]`);
+            if (!card) return;
+            const tmp = document.createElement('div');
+            tmp.innerHTML = courseCardHtml(c).trim();
+            const fresh = tmp.firstElementChild;
+            if (!fresh) return;
+            // Preserve the user's scroll position by replacing in place
+            card.replaceWith(fresh);
+            patched++;
+        });
+    });
+    return patched > 0;
 }
 
 /** Refresh every course list view */
@@ -2038,19 +2501,17 @@ function swapCourseGroup(fromId, toId) {
             .filter(id => id !== fromId)
             .map(findCourseById)
             .filter(Boolean);
-        for (const other of rest) {
-            const conflict = checkConflict(toCourse, other);
-            if (conflict.hasConflict) {
-                showConflictModal(toCourse, other, conflict);
-                return false;
-            }
+        const conflicts = collectConflicts(toCourse, rest);
+        if (conflicts.length) {
+            showConflictModal(toCourse, conflicts, fromId);
+            return false;
         }
     }
 
     state.selectedCourses[idx] = toId;
     saveSchedules();
     updateSummary();
-    refreshLists();
+    patchCardSelectionState(toId);   // covers from/to: same code variants
     renderSchedule();
     pushHistory(beforeIds, slotsOfCourses([fromId]));
 
@@ -2087,17 +2548,14 @@ function addCourse(courseId) {
         return;
     }
 
-    // Block time conflicts (parity-aware: زوج/فرد sessions sharing a slot don't clash)
+    // Block time conflicts (parity-aware: زوج/فرد sessions sharing a slot don't clash).
+    // Reports EVERY clashing pair, not just the first course that clashes.
     if (isValidationEnabled('conflict')) {
-        for (const existingId of state.selectedCourses) {
-            const existingCourse = findCourseById(existingId);
-            if (existingCourse) {
-                const conflict = checkConflict(course, existingCourse);
-                if (conflict.hasConflict) {
-                    showConflictModal(course, existingCourse, conflict);
-                    return;
-                }
-            }
+        const selected = state.selectedCourses.map(findCourseById).filter(Boolean);
+        const conflicts = collectConflicts(course, selected);
+        if (conflicts.length) {
+            showConflictModal(course, conflicts);
+            return;
         }
     }
 
@@ -2107,7 +2565,8 @@ function addCourse(courseId) {
     state.selectedCourses.push(courseId);
     saveSchedules();
     updateSummary();
-    refreshLists();
+    patchCardSelectionState(courseId);
+    if (isSearchModalOpen() || elements.listModal.classList.contains('active')) refreshLists();
     renderSchedule();
     pushHistory(beforeIds);
 
@@ -2137,7 +2596,8 @@ function removeCourse(courseId) {
     state.selectedCourses.splice(index, 1);
     saveSchedules();
     updateSummary();
-    refreshLists();
+    patchCardSelectionState(courseId);
+    lastRenderWasStructural = false; // removal → ghost trail is the feedback
     renderSchedule();
     pushHistory(beforeIds, slotsOfCourses([courseId]));
     // Removed course leaves a ghost trail on its old cells
@@ -2249,12 +2709,31 @@ function updateUnitsFlag() {
     elements.scheduleContainer.classList.toggle('over-limit', overLimit);
 }
 
+function popValue(el) {
+    if (!el) return;
+    el.classList.remove('value-pop');
+    void el.offsetWidth; // restart the animation
+    el.classList.add('value-pop');
+}
+
 function updateSummary() {
     const totalCourses = state.selectedCourses.length;
     const totalUnits = getTotalUnits();
 
+    // Feedback: counter pops when its value actually changes
+    if (elements.selectedCount.textContent !== toPersianNumber(totalCourses)) popValue(elements.selectedCount);
+    if (elements.totalUnits.textContent !== formatUnits(totalUnits)) popValue(elements.totalUnits);
+
     elements.selectedCount.textContent = toPersianNumber(totalCourses);
-    elements.totalUnits.textContent = formatUnits(totalUnits);
+    // Units counter: GSAP tween between values; countTo returns false when it
+    // won't animate (no GSAP / reduced motion) → set the value instantly.
+    let tweened = false;
+    if (window.Motion && elements.totalUnits.dataset.val != null) {
+        const prev = parseInt(elements.totalUnits.dataset.val, 10) || 0;
+        if (prev !== totalUnits) tweened = Motion.countTo(elements.totalUnits, prev, totalUnits, formatUnits);
+    }
+    if (!tweened) elements.totalUnits.textContent = formatUnits(totalUnits);
+    elements.totalUnits.dataset.val = String(totalUnits);
     elements.limitUnits.textContent = toPersianNumber(CONFIG.MAX_UNITS);
 
     // Over-limit styling (units rule OFF → flag hidden, counter stays normal)
@@ -2300,8 +2779,18 @@ function renderSchedule() {
         course.schedule.forEach(slot => renderCourseBlock(course, slot));
     });
 
+    // Springy settle for the blocks on screen (cheap: ≤ ~20 elements).
+    // @starting-style covers no-JS/reduced-motion; this adds the spring.
+    if (window.Motion && lastRenderWasStructural) {
+        Motion.blocksIn(elements.scheduleBody.querySelectorAll('.course-block'));
+    }
+    lastRenderWasStructural = true;
+
     renderNotimeChips();
 }
+
+/** True right after table rebuild/tab switch → blocks play their entrance */
+let lastRenderWasStructural = true;
 
 /** Union of base grid hours + every hour covered by selected courses */
 function getScheduleHours() {
@@ -2392,10 +2881,14 @@ function createCourseBlock(course, slot, extraClass) {
     const parity = slotParityLabel(slot);
     block.className = extraClass ? `course-block ${extraClass}` : 'course-block';
     if (parity) block.classList.add(`parity-${slot.parity}`);
+    if (course.isException) block.classList.add('course-block-exception');
+    if (isShareOrigin(state.activeScheduleId, getCourseId(course))) block.classList.add('course-block-share');
     block.style.backgroundColor = course.color;
     block.dataset.courseId = getCourseId(course);
     block.innerHTML = `
         ${parity ? `<span class="course-block-parity">${parity}</span>` : ''}
+        ${course.isException ? '<span class="course-block-origin" title="در دیتای فعلی نیست — استثنا از دیتای قبلی">⭯</span>' : ''}
+        ${isShareOrigin(state.activeScheduleId, getCourseId(course)) ? '<span class="course-block-origin" title="واردشده با لینک شیر">🔗</span>' : ''}
         <span class="course-block-name">${escapeHtml(course.name)}</span>
         <span class="course-block-time">${toPersianTime(slot.start)}-${toPersianTime(slot.end)}</span>
         <span class="course-block-group">گروه ${toPersianNumber(course.group)}</span>
@@ -2685,14 +3178,133 @@ function showCourseModal(course) {
     elements.courseModal.classList.add('active');
 }
 
-function showConflictModal(newCourse, existingCourse, conflict) {
+/**
+ * Time-conflict report. Lists EVERY clashing slot pair, each one labelled so
+ * it is obvious which time belongs to the course being added and which one is
+ * already in the program, and offers a one-click fix that removes the blocking
+ * courses and inserts the new one.
+ *
+ * @param {object} newCourse      course the student wants (or the incoming group)
+ * @param {Array}  conflicts      result of collectConflicts()
+ * @param {string|null} replaceId group being swapped out (swap flow only)
+ */
+function showConflictModal(newCourse, conflicts, replaceId = null) {
+    if (window.Motion) Motion.conflictAlert(document.getElementById('conflictModal').querySelector('.modal-content'));
+    const groups = groupConflicts(conflicts);
+    const conflictIds = blockedCourseIds(conflicts);
+    const newId = getCourseId(newCourse);
+
+    // What the fix button will do — kept so the click handler stays simple
+    state.pendingConflict = {
+        courseId: newId,
+        conflicts,
+        conflictIds,
+        replaceIds: replaceId && replaceId !== newId ? [replaceId] : []
+    };
+
+    const pairCount = conflicts.length;
     elements.conflictMessage.innerHTML = `
-        درس "<strong>${escapeHtml(newCourse.name)}</strong>" با درس "<strong>${escapeHtml(existingCourse.name)}</strong>"
-        تداخل زمانی دارد:<br><br>
-        روز <strong>${escapeHtml(conflict.day)}</strong> -
-        ساعت ${toPersianTime(conflict.time1)} با ${toPersianTime(conflict.time2)}
+        ${pairCount === 1 ? 'یک تداخل زمانی' : `${toPersianNumber(pairCount)} تداخل زمانی`} پیدا شد:
+        درس "<strong>${escapeHtml(newCourse.name)}</strong>"
+        (گروه ${toPersianNumber(newCourse.group)}) با
+        <strong>${toPersianNumber(groups.length)} درس</strong> از دروس موجود در برنامه هم‌زمان است.
+        ${replaceId ? '<br>این درس جای‌گزین گروه فعلی برنامه می‌شود.' : ''}
     `;
+
+    elements.conflictGroups.innerHTML = groups.map(group => `
+        <div class="conflict-group">
+            <div class="conflict-group-head">
+                <span class="conflict-badge conflict-badge-old">از قبل در برنامه</span>
+                <span class="conflict-group-name">${escapeHtml(group.course.name)}</span>
+                <span class="conflict-group-meta">
+                    گروه ${toPersianNumber(group.course.group)} | کد ${toPersianNumber(group.course.code)}
+                    ${group.course.professor && group.course.professor !== 'نامعلوم'
+                        ? ` | ${escapeHtml(group.course.professor)}` : ''}
+                </span>
+            </div>
+            <ul class="conflict-pairs">
+                ${group.pairs.map(pair => `
+                    <li class="conflict-pair">
+                        <div class="conflict-slot conflict-slot-new">
+                            <span class="conflict-slot-tag">درس جدید</span>
+                            <span class="conflict-slot-time">${escapeHtml(formatSlotLabel(pair.newSlot))}</span>
+                        </div>
+                        <span class="conflict-pair-x">✕</span>
+                        <div class="conflict-slot conflict-slot-old">
+                            <span class="conflict-slot-tag">در برنامه</span>
+                            <span class="conflict-slot-time">${escapeHtml(formatSlotLabel(pair.oldSlot))}</span>
+                        </div>
+                    </li>`).join('')}
+            </ul>
+        </div>`).join('');
+
+    const swapping = !!replaceId;
+    const action = conflictIds.length
+        ? `${swapping ? '⇄ حذف' : '🗑 حذف'} ${toPersianNumber(conflictIds.length)} درس متداخل و ${swapping ? 'جابجایی' : 'افزودن'} "${escapeHtml(newCourse.name)}"`
+        : `${swapping ? '⇄ جابجایی' : 'افزودن'} "${escapeHtml(newCourse.name)}"`;
+    elements.btnForceAddConflict.textContent = action;
+
+    elements.conflictNote.textContent = conflictIds.length
+        ? `با زدن دکمه زیر، ${toPersianNumber(conflictIds.length)} درس متداخل از برنامه حذف و "${newCourse.name}" اضافه می‌شود. این کار یک مرحله حساب می‌شود و با «برگشت» کامل برمی‌گردد.`
+        : `با زدن دکمه زیر، "${newCourse.name}" وارد برنامه می‌شود.`;
+
     elements.conflictModal.classList.add('active');
+}
+
+/**
+ * Apply the pending conflict fix: drop the blocking courses (plus the group
+ * being replaced), insert the new course, and record ONE undo step so Undo
+ * restores everything and Redo brings the fix back.
+ */
+function forceAddConflict() {
+    const pending = state.pendingConflict;
+    if (!pending) return false;
+    const course = findCourseById(pending.courseId);
+    if (!course) return false;
+
+    const beforeIds = [...state.selectedCourses];
+    const drop = new Set([...pending.conflictIds, ...pending.replaceIds, pending.courseId]);
+    const nextIds = beforeIds.filter(id => !drop.has(id));
+    if (!nextIds.includes(pending.courseId)) nextIds.push(pending.courseId);
+
+    const removedIds = beforeIds.filter(id => id !== pending.courseId && drop.has(id));
+    const removedConflicts = beforeIds.filter(id => pending.conflictIds.includes(id)).length;
+    const isSwap = pending.replaceIds.some(id => beforeIds.includes(id)) || beforeIds.includes(pending.courseId);
+    const wasOverLimit = getTotalUnits() > CONFIG.MAX_UNITS;
+
+    state.selectedCourses = nextIds;
+    state.unitsWarned = false;
+    saveSchedules();
+    updateSummary();
+    refreshLists();
+    renderSchedule();
+    renderScheduleTabs();
+    // One history entry for the whole fix — Undo/Redo behave like any add
+    pushHistory(beforeIds, slotsOfCourses(removedIds));
+
+    // Chess-move feedback: shine the new course, ghost trail where the old
+    // courses used to sit
+    shineCourses([pending.courseId], slotsOfCourses(removedIds));
+
+    state.pendingConflict = null;
+    closeAllModals();
+
+    const headline = isSwap
+        ? `درس "${course.name}" به گروه ${toPersianNumber(course.group)} جابجا شد`
+        : `درس "${course.name}" اضافه شد`;
+    showToast(removedConflicts
+        ? `${headline} و ${toPersianNumber(removedConflicts)} درس متداخل حذف شد`
+        : headline, 'success');
+
+    if (!isSwap && !course.schedule.length) {
+        showToast(`"${course.name}" ساعت کلاسی در دیتا ندارد و در ردیف «سایر دروس» جدول نمایش داده می‌شود`, 'info');
+    }
+
+    const total = getTotalUnits();
+    if (isValidationEnabled('units') && !wasOverLimit && total > CONFIG.MAX_UNITS) {
+        showToast(`هشدار: جمع واحدها (${formatUnits(total)}) از ${toPersianNumber(CONFIG.MAX_UNITS)} واحد مجاز بیشتر شد!`, 'warning');
+    }
+    return true;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2874,9 +3486,9 @@ function renderSelectedList() {
             : 'ظرفیت: نامشخص';
 
         return `
-            <div class="selected-item">
+            <div class="selected-item" style="--course-accent: ${course.color || 'var(--border-focus)'}">
                 <div class="selected-item-info">
-                    <span class="selected-item-name">${escapeHtml(course.name)}${course.degree ? `<span class="selected-item-degree">${escapeHtml(course.degree)}</span>` : ''}</span>
+                    <span class="selected-item-name">${escapeHtml(course.name)}${course.isException ? '<span class="selected-item-degree origin-tag-exception">⭯ استثنا</span>' : ''}${isShareOrigin(state.activeScheduleId, courseId) ? '<span class="selected-item-degree origin-tag-share">🔗 لینک شیر</span>' : ''}${course.degree ? `<span class="selected-item-degree">${escapeHtml(course.degree)}</span>` : ''}</span>
                     <span class="selected-item-meta">
                         ${escapeHtml(course.professor)} | ${formatUnits(course.units)} واحد | گروه ${toPersianNumber(course.group)} | کد ${toPersianNumber(course.code)}<br>
                         ${scheduleText}<br>
@@ -2892,9 +3504,7 @@ function renderSelectedList() {
             </div>`;
     }).join('');
 
-    elements.selectedList.querySelectorAll('.selected-item-remove').forEach(btn => {
-        btn.addEventListener('click', () => removeCourse(btn.dataset.courseId));
-    });
+    bindCardButtons(elements.selectedList); // delegated: one listener, not N
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -3076,6 +3686,7 @@ async function copyCostScript() {
 function closeAllModals() {
     document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('active'));
     state.currentModalCourse = null;
+    state.pendingConflict = null;   // a dismissed conflict report is not a pending fix
     if (isSearchModalOpen()) setSearchModalOpen(false);
 }
 
@@ -3139,7 +3750,7 @@ function rematchTabCourses(oldIds, newCourses) {
             matched.push(id);
             return;
         }
-        const old = findCourseById(id);
+        const old = findCourseById(id) || getTabExceptions(state.activeScheduleId).find(c => getCourseId(c) === id);
         const parts = splitCourseId(id);
         lost.push({
             oldId: id,
@@ -3147,6 +3758,7 @@ function rematchTabCourses(oldIds, newCourses) {
             code: old ? old.code : parts.code,
             oldGroup: old ? old.group : parts.group,
             oldProfessor: old ? old.professor : '',
+            snapshot: old ? snapshotCourse(old) : null,
             options: (byCode.get(old ? old.code : parts.code) || []).map(c => ({
                 id: getCourseId(c),
                 group: c.group,
@@ -3163,26 +3775,39 @@ function rematchTabCourses(oldIds, newCourses) {
  * After a dataset swap, re-match EVERY tab against the new courses and
  * keep what still fits. Tabs never get wiped; anything unmatched is
  * reported in the dataset-report modal (with replacement options).
- * Returns { totalLost } for the toast.
+ * Also re-validates capacity of still-matching courses against the NEW
+ * numbers and reports full ones. Returns { totalLost } for the toast.
  */
 function rematchAllTabsAgainstDataset(newCourses) {
     syncSchedulesFromState(); // active tab's courses are current in state.schedules
 
+    const byId = new Map(newCourses.map(c => [getCourseId(c), c]));
     let totalLost = 0;
+    let totalFull = 0;
     const entries = [];
     state.schedules.forEach(tab => {
         const { matched, lost } = rematchTabCourses([...tab.courses], newCourses);
         tab.courses = matched;
-        if (lost.length) {
-            totalLost += lost.length;
-            entries.push({ tabId: tab.id, tabName: tab.name, matchedCount: matched.length, lost });
+        if (lost.length) totalLost += lost.length;
+
+        // Capacity re-check against the NEW dataset's registered/capacity
+        const fullInNew = [];
+        matched.forEach(id => {
+            const c = byId.get(id);
+            if (c && !isCapacityAvailable(c)) fullInNew.push({ ...c });
+        });
+        if (fullInNew.length) totalFull += fullInNew.length;
+
+        if (lost.length || fullInNew.length) {
+            entries.push({ tabId: tab.id, tabName: tab.name, matchedCount: matched.length,
+                lost, fullInNew });
         }
     });
 
     state.selectedCourses = [...(getActiveSchedule()?.courses || [])];
 
     if (entries.length) openDatasetReportModal(entries);
-    return totalLost;
+    return { totalLost, totalFull };
 }
 
 // ── Dataset report modal (per-tab: matched count + lost courses + options) ──
@@ -3194,40 +3819,80 @@ function openDatasetReportModal(entries) {
     datasetReportEntries = entries;
     datasetReportIndex = [];
     const totalLost = entries.reduce((s, e) => s + e.lost.length, 0);
+    const totalFull = entries.reduce((s, e) => s + (e.fullInNew ? e.fullInNew.length : 0), 0);
+    const totalIssues = totalLost + totalFull;
     elements.datasetReportTitle.textContent =
-        `بررسی دروس تطبیق‌نخورده (${toPersianNumber(totalLost)} درس)`;
+        `بررسی دروس با دیتای جدید (${toPersianNumber(totalIssues)} درس)`;
 
     elements.datasetReportBody.innerHTML = entries.map(entry => `
         <div class="dr-tab-block">
             <div class="dr-tab-title">${escapeHtml(entry.tabName)}
-                <span class="dr-tab-meta">${toPersianNumber(entry.matchedCount)} درس تطبیق خورد · ${toPersianNumber(entry.lost.length)} درس نیاز به بررسی دارد</span>
+                <span class="dr-tab-meta">${toPersianNumber(entry.matchedCount)} درس سالم · ${toPersianNumber(entry.lost.length + (entry.fullInNew ? entry.fullInNew.length : 0))} درس نیاز به بررسی دارد</span>
             </div>
             ${entry.lost.map(item => {
                 const myIdx = datasetReportIndex.length;
-                datasetReportIndex.push({ tabId: entry.tabId, item });
+                datasetReportIndex.push({ tabId: entry.tabId, item, kind: 'lost' });
                 const optionsHtml = item.options.length
                     ? `<div class="dr-options">` +
-                      `<label class="dr-option dr-option-drop">
-                          <input type="radio" name="dr-${myIdx}" value="">
-                          <span class="dr-option-main">نگه نداشتن — از برنامه حذف شود</span>
+                      `<label class="dr-option dr-option-keep">
+                          <input type="radio" name="dr-${myIdx}" value="__keep__" ${item.options.length ? '' : 'checked'}>
+                          <span class="dr-option-main">استثنا نگه‌دار — همان گروه قبلی بماند (با دیتای قبلی)</span>
                       </label>` +
                       item.options.map((opt, oi) => `
                       <label class="dr-option">
-                          <input type="radio" name="dr-${myIdx}" value="${escapeHtml(opt.id)}" ${oi === 0 ? 'checked' : ''}>
+                          <input type="radio" name="dr-${myIdx}" value="${escapeHtml(opt.id)}" ${oi === 0 && !item.options.length ? 'checked' : ''}>
                           <span class="dr-option-main">
                               <b>گروه ${toPersianNumber(opt.group)}</b> — ${escapeHtml(opt.professor)} · ${formatUnits(opt.units)} واحد
                           </span>
                           <span class="dr-option-sched">${escapeHtml(slotsSummaryLine(opt.schedule))}</span>
                       </label>`).join('') +
+                      `<label class="dr-option dr-option-drop">
+                          <input type="radio" name="dr-${myIdx}" value="">
+                          <span class="dr-option-main">نگه نداشتن — از برنامه حذف شود</span>
+                      </label>` +
                       `</div>`
-                    : `<div class="dr-no-options">در دیتای جدید هیچ گروهی از این درس (کد ${toPersianNumber(item.code)}) پیدا نشد — از برنامه حذف می‌شود.</div>`;
+                    : `<div class="dr-options">
+                          <label class="dr-option dr-option-keep">
+                              <input type="radio" name="dr-${myIdx}" value="__keep__" checked>
+                              <span class="dr-option-main">استثنا نگه‌دار — این درس در دیتای جدید نیست ولی بماند</span>
+                          </label>
+                          <label class="dr-option dr-option-drop">
+                              <input type="radio" name="dr-${myIdx}" value="">
+                              <span class="dr-option-main">نگه نداشتن — از برنامه حذف شود</span>
+                          </label>
+                       </div>`;
                 return `
                 <div class="dr-lost-item" data-lost-idx="${myIdx}">
                     <div class="dr-lost-head">
                         <span class="dr-lost-name">${escapeHtml(item.name)}</span>
-                        <span class="dr-lost-meta">کد ${toPersianNumber(item.code)} · گروه ${toPersianNumber(item.oldGroup)}${item.oldProfessor ? ` · ${escapeHtml(item.oldProfessor)}` : ''}</span>
+                        <span class="dr-lost-meta">در دیتای جدید نیست · کد ${toPersianNumber(item.code)} · گروه ${toPersianNumber(item.oldGroup)}${item.oldProfessor ? ` · ${escapeHtml(item.oldProfessor)}` : ''}</span>
                     </div>
                     ${optionsHtml}
+                </div>`;
+            }).join('')}
+            ${(entry.fullInNew || []).map(item => {
+                const myIdx = datasetReportIndex.length;
+                datasetReportIndex.push({ tabId: entry.tabId, item: {
+                    oldId: getCourseId(item), name: item.name, code: item.code,
+                    oldGroup: item.group, oldProfessor: item.professor,
+                    fullData: { registered: item.registered, capacity: item.capacity }
+                }, kind: 'full' });
+                return `
+                <div class="dr-lost-item dr-full-item" data-lost-idx="${myIdx}">
+                    <div class="dr-lost-head">
+                        <span class="dr-lost-name">${escapeHtml(item.name)}</span>
+                        <span class="dr-lost-meta dr-meta-warn">ظرفیت پر در دیتای جدید · ${toPersianNumber(item.registered)}/${toPersianNumber(item.capacity)}</span>
+                    </div>
+                    <div class="dr-options">
+                        <label class="dr-option dr-option-keep">
+                            <input type="radio" name="dr-${myIdx}" value="__keep__">
+                            <span class="dr-option-main">بماند — ولیدیشن ظرفیت برای این برنامه خاموش شود</span>
+                        </label>
+                        <label class="dr-option dr-option-drop">
+                            <input type="radio" name="dr-${myIdx}" value="" checked>
+                            <span class="dr-option-main">از برنامه حذف شود (توصیه‌شده)</span>
+                        </label>
+                    </div>
                 </div>`;
             }).join('')}
         </div>`).join('');
@@ -3243,6 +3908,8 @@ function applyDatasetReportChoices() {
     }
 
     let appliedCount = 0;
+    let keptCount = 0;
+    const capOffTabs = new Set();
     elements.datasetReportBody.querySelectorAll('.dr-lost-item').forEach(itemEl => {
         const idx = parseInt(itemEl.dataset.lostIdx, 10);
         const ref = datasetReportIndex[idx];
@@ -3250,11 +3917,53 @@ function applyDatasetReportChoices() {
         const tab = state.schedules.find(t => t.id === ref.tabId);
         if (!tab) return;
         const checked = itemEl.querySelector('input[type="radio"]:checked');
-        if (checked && checked.value && !tab.courses.includes(checked.value)) {
-            tab.courses.push(checked.value);
+        if (!checked) return;
+        const val = checked.value;
+
+        if (ref.kind === 'full') {
+            // Capacity-full course in the NEW dataset
+            if (val === '__keep__') {
+                capOffTabs.add(tab.id); // user accepts it → disable capacity rule here
+            }
+            // else: default radio is remove → the id was already absent from
+            // the matched list? No — fullInNew courses ARE in matched; drop it:
+            if (val === '') {
+                tab.courses = tab.courses.filter(id => id !== ref.item.oldId);
+            }
+            return;
+        }
+
+        if (val === '__keep__') {
+            // Keep the old course as an exception (snapshot carries old data)
+            const src = ref.item.snapshot || rematchSnapshotFor(ref.item);
+            if (src && !tab.courses.includes(ref.item.oldId)) {
+                tab.courses.push(ref.item.oldId);
+                const ex = getTabExceptions(tab.id).filter(c => getCourseId(c) !== ref.item.oldId);
+                ex.push(snapshotCourse(src));
+                state.datasetExceptions[tab.id] = ex;
+                keptCount += 1;
+            }
+        } else if (val && !tab.courses.includes(val)) {
+            tab.courses.push(val);
             appliedCount += 1;
         }
     });
+
+    // Disable capacity validation on tabs where the user chose to keep fulls
+    capOffTabs.forEach(tabId => {
+        const tab = state.schedules.find(t => t.id === tabId);
+        if (!tab) return;
+        tab.validationOverrides = { ...getValidationOverrides(), capacity: false };
+    });
+
+    // Clean exceptions for courses that were replaced/removed
+    state.schedules.forEach(tab => {
+        const kept = new Set(tab.courses);
+        const ex = getTabExceptions(tab.id).filter(c => kept.has(getCourseId(c)));
+        if (ex.length) state.datasetExceptions[tab.id] = ex;
+        else delete state.datasetExceptions[tab.id];
+    });
+    saveDatasetMeta();
 
     const activeTab = getActiveSchedule();
     if (activeTab) state.selectedCourses = [...activeTab.courses];
@@ -3263,16 +3972,28 @@ function applyDatasetReportChoices() {
     datasetReportIndex = [];
     state.unitsWarned = false;
     saveSchedules();
+    saveValidationOverrides();
     updateSummary();
     updateUnitsFlag();
     refreshLists();
     renderSchedule();
     renderScheduleTabs();
     closeAllModals();
-    showToast(appliedCount
-        ? `${toPersianNumber(appliedCount)} درس با گروه‌های جدید جایگزین شد`
-        : 'فقط دروس تطبیق‌خورده نگه داشته شدند',
-        'success');
+    const parts = [];
+    if (appliedCount) parts.push(`${toPersianNumber(appliedCount)} درس جایگزین شد`);
+    if (keptCount) parts.push(`${toPersianNumber(keptCount)} درس به‌عنوان استثنا ماند`);
+    showToast(parts.length ? parts.join(' · ') : 'فقط دروس سالم نگه داشته شدند', 'success');
+}
+
+/** Best-effort snapshot for a lost item (from the pre-swap dataset) */
+function rematchSnapshotFor(item) {
+    const all = state.customActive ? state.customCourses : state.defaultCourses;
+    return all.find(c => getCourseId(c) === item.oldId) || null;
+}
+
+/** Invalidate O(1) course lookup (call after ANY dataset/degree change) */
+function invalidateCourseIndex() {
+    courseIndexKey = '';
 }
 
 function applyCustomData(text, { silent = false } = {}) {
@@ -3284,13 +4005,15 @@ function applyCustomData(text, { silent = false } = {}) {
 
     // Re-match the current selection against the NEW dataset BEFORE swapping
     // it in (old course objects are still reachable for names/metadata)
-    const totalLost = rematchAllTabsAgainstDataset(courses);
+    const { totalLost } = rematchAllTabsAgainstDataset(courses);
 
     state.customCourses = courses;
     state.customActive = true;
+    invalidateCourseIndex();
     saveCustomData(text);
 
     saveSchedules();
+    saveDatasetMeta();
     updateUnitsFlag();
     state.unitsWarned = false;
 
@@ -3311,15 +4034,17 @@ function applyCustomData(text, { silent = false } = {}) {
 
 function restoreDefaultData() {
     // Re-match tabs against the DEFAULT dataset before leaving custom mode
-    const totalLost = state.defaultCourses.length
+    const { totalLost } = state.defaultCourses.length
         ? rematchAllTabsAgainstDataset(state.defaultCourses)
-        : 0;
+        : { totalLost: 0 };
 
     state.customCourses = [];
     state.customActive = false;
+    invalidateCourseIndex();
     clearCustomData();
 
     saveSchedules();
+    saveDatasetMeta();
     updateUnitsFlag();
     state.unitsWarned = false;
 
@@ -3359,7 +4084,7 @@ async function exportPDF() {
         wrapper.className = 'dark-mode';
         wrapper.style.cssText = `
             position: fixed; left: -9999px; top: 0; width: 1320px;
-            padding: 24px; background: #0a0a0a; color: #ffffff;
+            padding: 24px; background: #0a0a0a; color: #fafafa;
             font-family: 'Vazirmatn', sans-serif; direction: rtl;`;
 
         const totalUnits = getTotalUnits();
@@ -3503,11 +4228,16 @@ let pendingShareIds = null;
 
 /** Restore selections from a share link's #hash (returns true when applied) */
 function restoreFromHash() {
-    if (!location.hash || location.hash.length < 2) return false;
+    if (!location.hash || !location.hash.length || location.hash.length < 2) return false;
     try {
         const payload = JSON.parse(decodeURIComponent(escape(atob(location.hash.slice(1)))));
         const ids = Array.isArray(payload.c) ? payload.c.filter(id => typeof id === 'string') : [];
-        const valid = ids.filter(id => findCourseById(id));
+        // Validate against BOTH datasets (default + any loaded custom), since the
+        // link may originate from either. Invalid/unknown ids are reported later.
+        const all = [...state.defaultCourses, ...state.customCourses];
+        const known = new Set(all.map(c => getCourseId(c)));
+        const valid = ids.filter(id => known.has(id));
+        state.pendingShareInvalidIds = ids.filter(id => !known.has(id));
         if (!valid.length) return false;
 
         pendingShareIds = valid;
@@ -3536,9 +4266,11 @@ function restoreFromHash() {
 function openShareLanding() {
     const sharedCount = pendingShareIds.length;
     const canCreateNew = state.schedules.length < CONFIG.MAX_SCHEDULES;
+    const invalidCount = (state.pendingShareInvalidIds || []).length;
 
     elements.shareLandingMessage.innerHTML =
-        `این لینک شامل <strong>${toPersianNumber(sharedCount)} درس</strong> است. بریز داخل کدام برنامه؟`;
+        `این لینک شامل <strong>${toPersianNumber(sharedCount)} درس</strong> است${invalidCount
+            ? ` — <span class="share-invalid-warn">${toPersianNumber(invalidCount)} درس در دیتای فعلی پیدا نشد و کنار گذاشته می‌شود</span>` : ''}. بریز داخل کدام برنامه؟`;
 
     const rows = [];
     if (canCreateNew) {
@@ -3579,6 +4311,7 @@ function applyShareLanding() {
         syncSchedulesFromState();
         state.activeScheduleId = id;
         state.selectedCourses = [...pendingShareIds];
+        markTabOrigins(id, pendingShareIds); // these came from a share link
         applyValidationsToTab(id, state.pendingShareValidations); // rule switches stick to the tab
         showToast(`"${tab.name}" ساخته شد و برنامه اشتراکی داخل آن ریخته شد`, 'success');
     } else {
@@ -3588,6 +4321,7 @@ function applyShareLanding() {
         syncSchedulesFromState();
         state.activeScheduleId = tab.id;
         state.selectedCourses = [...pendingShareIds];
+        markTabOrigins(tab.id, pendingShareIds);
         applyValidationsToTab(tab.id, state.pendingShareValidations); // rule switches stick to the tab
         showToast(
             replaced
@@ -3598,15 +4332,30 @@ function applyShareLanding() {
     }
 
     pendingShareIds = null;
+    state.pendingShareInvalidIds = [];
     state.pendingShareValidations = null;
     state.unitsWarned = false;
     saveSchedules();
+    saveDatasetMeta();
     updateSummary();
     updateUnitsFlag();
     refreshLists();
     renderSchedule();
     renderScheduleTabs();
     return true;
+}
+
+/** Remember which courses of a tab came from a share link */
+function markTabOrigins(tabId, ids) {
+    const map = state.courseOrigins[tabId] || {};
+    ids.forEach(id => { map[id] = true; });
+    state.courseOrigins[tabId] = map;
+    saveDatasetMeta();
+}
+
+/** True when a course id arrived via share link in this tab */
+function isShareOrigin(tabId, courseId) {
+    return !!(state.courseOrigins[tabId] && state.courseOrigins[tabId][courseId]);
 }
 
 /** Run one of the standard exports against the SHARED list (before it is
@@ -4181,6 +4930,13 @@ function exportIoOpen() {
     elements.ioModal.classList.add('active');
 }
 
+/** Open the IO modal directly on the IMPORT tab (دکمه‌ی ورود) */
+function importIoOpen() {
+    setIoTab('import');
+    elements.ioModal.classList.add('active');
+    document.getElementById('ioPasteBox')?.focus();
+}
+
 function setIoTab(tab) {
     const isExport = tab === 'export';
     elements.tabIoExport.classList.toggle('active', isExport);
@@ -4595,13 +5351,32 @@ function showToast(message, type = 'info') {
         <span class="toast-icon">${icons[type] || icons.info}</span>
         <span class="toast-message">${message}</span>`;
 
+    // FLIP: nudge already-visible toasts out of the way BEFORE appending
+    if (window.Motion) Motion.toastsShift(elements.toastContainer, null);
+
     elements.toastContainer.appendChild(toast);
+
+    // GSAP entrance when available; the CSS .entered transition stays as the
+    // fallback (also covers reduced-motion + offline CDN).
+    if (window.Motion) {
+        Motion.toastIn(toast);
+        toast.classList.add('entered'); // final state set immediately (no flash)
+    } else {
+        // Transition-based enter (interruptible): force a style flush, then slide in.
+        // (Synchronous reflow instead of double-rAF — rAF can be throttled in
+        // background/hidden tabs and the toast would never appear.)
+        void toast.offsetWidth;
+        toast.classList.add('entered');
+    }
 
     // Warnings linger longer so the user has time to read them
     const duration = type === 'warning' ? CONFIG.TOAST_WARNING_DURATION : CONFIG.TOAST_DURATION;
     setTimeout(() => {
         toast.classList.add('removing');
-        toast.addEventListener('animationend', () => toast.remove());
+        if (window.gsap) gsap.killTweensOf(toast); // no zombie tweens on hidden tabs
+        toast.addEventListener('transitionend', () => toast.remove(), { once: true });
+        // transitionend can be swallowed when the tab is hidden — hard-remove fallback
+        setTimeout(() => toast.remove(), 400);
     }, duration);
 }
 
@@ -4609,18 +5384,21 @@ function showToast(message, type = 'info') {
 // THEME MANAGEMENT
 // ═══════════════════════════════════════════════════════════════
 
-function toggleTheme() {
-    const body = document.body;
-    const isDark = body.classList.contains('dark-mode');
+function applyTheme(next) {
+    document.body.classList.remove('dark-mode', 'light-mode');
+    document.body.classList.add(next + '-mode');
+    localStorage.setItem('theme', next);
+}
 
-    if (isDark) {
-        body.classList.remove('dark-mode');
-        body.classList.add('light-mode');
-        localStorage.setItem('theme', 'light');
+function toggleTheme() {
+    const next = document.body.classList.contains('dark-mode') ? 'light' : 'dark';
+
+    // Crossfade the whole page when the browser supports it — a soft
+    // monochrome blend instead of a hard snap between themes.
+    if (document.startViewTransition && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        document.startViewTransition(() => applyTheme(next));
     } else {
-        body.classList.remove('light-mode');
-        body.classList.add('dark-mode');
-        localStorage.setItem('theme', 'dark');
+        applyTheme(next);
     }
 }
 
@@ -4644,7 +5422,8 @@ function setupEventListeners() {
     });
 
     // Live search inside the modal (results list is always visible there)
-    elements.searchInput.addEventListener('input', () => showSearchResults(false));
+    // Debounced: typing a full word costs ONE render, not one per keystroke
+    elements.searchInput.addEventListener('input', debounceFn(() => showSearchResults(false), 140));
 
     elements.searchClear.addEventListener('click', () => {
         elements.searchInput.value = '';
@@ -4652,8 +5431,8 @@ function setupEventListeners() {
         elements.searchInput.focus();
     });
 
-    // Desktop panel search
-    elements.panelSearch.addEventListener('input', renderPanelList);
+    // Desktop panel search (debounced — 1282 cards are not re-rendered per keystroke)
+    elements.panelSearch.addEventListener('input', debounceFn(() => renderPanelList(), 140));
     elements.panelSearchClear.addEventListener('click', () => {
         elements.panelSearch.value = '';
         renderPanelList();
@@ -4669,6 +5448,34 @@ function setupEventListeners() {
         renderSelectedList();
         elements.listModal.classList.add('active');
     });
+    // Export menu: one dropdown triggers the existing handlers (menu mirrors
+    // the desktop buttons via data-export="btnId"), closes on outside click / Esc
+    const exportWrap = document.getElementById('exportMenuWrap');
+    const exportBtn = document.getElementById('btnExportMenu');
+    const exportPop = document.getElementById('exportMenuPop');
+    if (exportWrap && exportBtn && exportPop) {
+        const setMenuOpen = open => {
+            exportPop.hidden = !open;
+            exportBtn.setAttribute('aria-expanded', String(open));
+        };
+        exportBtn.addEventListener('click', e => {
+            e.stopPropagation();
+            setMenuOpen(exportPop.hidden);
+        });
+        exportPop.addEventListener('click', e => {
+            const item = e.target.closest('[data-export]');
+            if (!item) return;
+            setMenuOpen(false);
+            document.getElementById(item.dataset.export)?.click();
+        });
+        document.addEventListener('click', e => {
+            if (!exportWrap.contains(e.target)) setMenuOpen(false);
+        });
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape' && !exportPop.hidden) setMenuOpen(false);
+        });
+    }
+
     elements.btnCopyTable.addEventListener('click', copyToClipboard);
     elements.btnShareLink.addEventListener('click', shareSchedule);
     elements.btnCost.addEventListener('click', openCostModal);
@@ -4676,6 +5483,68 @@ function setupEventListeners() {
     elements.btnReset.addEventListener('click', resetSchedule);
     elements.btnUndo.addEventListener('click', undoSchedule);
     elements.btnRedo.addEventListener('click', redoSchedule);
+
+    // Vertical glass tool dock (desktop) — same actions, icon buttons
+    const bindDock = (dockId, action) => {
+        const btn = document.getElementById(dockId);
+        if (btn) btn.addEventListener('click', action);
+    };
+    bindDock('dockViewList', () => {
+        renderSelectedList();
+        elements.listModal.classList.add('active');
+    });
+    bindDock('dockAiPlan', () => elements.btnAiPlan.click());
+    bindDock('dockExportPDF', exportPDF);
+    bindDock('dockCopyTable', copyToClipboard);
+    bindDock('dockShareLink', shareSchedule);
+    bindDock('dockIo', exportIoOpen);
+    bindDock('dockImport', importIoOpen);
+    bindDock('dockCost', openCostModal);
+    bindDock('dockCustomData', () => {
+        updateCustomDataStatus();
+        elements.customDataModal.classList.add('active');
+    });
+    bindDock('dockValidations', openValidationModal);
+    bindDock('dockUndo', undoSchedule);
+    bindDock('dockRedo', redoSchedule);
+    bindDock('dockReset', resetSchedule);
+
+    // Dock expand-on-hover: labels slide out, the grid column grows in sync
+    // so panel + schedule glide aside instead of jumping. Focus-within keeps
+    // it open for keyboard users; pointerleave (with a small grace delay so
+    // moving between buttons never flickers) closes it.
+    const toolDockEl = document.getElementById('toolDock');
+    const workspaceEl = document.querySelector('.workspace');
+    const desktopMq = window.matchMedia('(min-width: 1024px)');
+    if (toolDockEl && workspaceEl) {
+        let expandTimer = null;
+        const setExpanded = (open) => {
+            clearTimeout(expandTimer);
+            expandTimer = setTimeout(() => {
+                toolDockEl.classList.toggle('expanded', open);
+                workspaceEl.classList.toggle('dock-expanded', open);
+            }, open ? 60 : 140); // tiny delay on open, grace period on close
+        };
+        const canHover = (e) => !e || e.pointerType !== 'touch';
+        toolDockEl.addEventListener('pointerenter', (e) => {
+            if (!desktopMq.matches || !canHover(e)) return; // mobile: floating dock only
+            setExpanded(true);
+        });
+        toolDockEl.addEventListener('pointerleave', () => setExpanded(false));
+        // Keyboard path: focus/blur listeners directly on each button (focusin
+        // proved unreliable for programmatic focus in some embedded views).
+        toolDockEl.querySelectorAll('.dock-btn').forEach(btn => {
+            btn.addEventListener('focus', () => { if (desktopMq.matches) setExpanded(true); });
+            btn.addEventListener('blur', () => {
+                // Wait a tick: focus may be moving to ANOTHER dock button
+                setTimeout(() => {
+                    if (!toolDockEl.contains(document.activeElement)) setExpanded(false);
+                }, 0);
+            });
+        });
+        // Crossing the breakpoint back to mobile must not leave a stuck-open dock
+        desktopMq.addEventListener('change', (e) => { if (!e.matches) setExpanded(false); });
+    }
 
     // Mobile floating action dock — same actions as the controls above
     elements.btnUndoM.addEventListener('click', undoSchedule);
@@ -4713,7 +5582,7 @@ function setupEventListeners() {
         elements.scheduleContainer.style.removeProperty('--fit-scale');
     };
 
-    const fitOnResize = () => applyFitScale();
+    const fitOnResize = rafThrottle(() => applyFitScale());
 
     const toggleFitMode = () => {
         const active = elements.scheduleContainer.classList.toggle('fit-mode');
@@ -4740,7 +5609,7 @@ function setupEventListeners() {
         if (isFitMode()) return; // fit-mode keeps its transposed grid
         renderSchedule();
     };
-    window.addEventListener('resize', onViewportChange);
+    window.addEventListener('resize', rafThrottle(onViewportChange));
 
     // Tap anywhere on the fullscreen overlay (outside the table) exits fit mode
     elements.scheduleContainer.addEventListener('click', (e) => {
@@ -4814,8 +5683,16 @@ function setupEventListeners() {
     elements.btnCloseCourseModal.addEventListener('click', closeAllModals);
     elements.closeListModal.addEventListener('click', closeAllModals);
     elements.btnCloseListModal.addEventListener('click', closeAllModals);
-    elements.closeConflictModal.addEventListener('click', closeAllModals);
-    elements.btnCloseConflictModal.addEventListener('click', closeAllModals);
+    elements.closeConflictModal.addEventListener('click', () => {
+        state.pendingConflict = null;
+        closeAllModals();
+    });
+    elements.btnCloseConflictModal.addEventListener('click', () => {
+        state.pendingConflict = null;
+        closeAllModals();
+    });
+    // One-click fix: drop the clashing courses and insert the new one
+    elements.btnForceAddConflict.addEventListener('click', forceAddConflict);
     elements.closeCustomDataModal.addEventListener('click', closeAllModals);
 
     // Share-link landing
@@ -4856,6 +5733,7 @@ function setupEventListeners() {
     // Degree (مقطع) choice filters the whole active dataset live
     elements.degreeSelect.addEventListener('change', () => {
         state.degree = elements.degreeSelect.value;
+        invalidateCourseIndex();
         saveDegree(state.degree);
         populateDegreeSelect(); // keeps the chosen option selected
         updateSummary();
@@ -4954,6 +5832,9 @@ async function init() {
     initializeFooter();
     loadTheme();
 
+    // Restore dataset exceptions + share-link origins (if any)
+    loadDatasetMeta();
+
     // Restore persisted custom data (if any)
     const savedCustom = loadCustomData();
     if (savedCustom) {
@@ -4981,7 +5862,7 @@ async function init() {
     } else {
         elements.freshnessLastUpdate.textContent = elements.lastUpdateValue.textContent;
     }
-    elements.freshnessModal.classList.add('active');
+    if (!location.search.includes('nomodal')) elements.freshnessModal.classList.add('active');
 
     // Restore schedule tabs first (seeds tab 1 from the legacy key on first run),
     // then import a share link into the active tab or load its saved selection
@@ -4991,6 +5872,11 @@ async function init() {
         loadFromStorage(); // no share link → load saved selections
     }
     syncSchedulesFromState();
+
+    // Exceptions whose course returned to the default dataset heal silently;
+    // others keep living in their tab as snapshots.
+    state.schedules.forEach(pruneHealedExceptions);
+    saveDatasetMeta();
 
     // "Future tabs" validation defaults: restore the saved override set
     try {
@@ -5020,3 +5906,10 @@ async function init() {
 
 // Start the application
 document.addEventListener('DOMContentLoaded', init);
+
+// Page-load entrance: staggered rise for header/summary/workspace/footer.
+// Purely decorative — removed right after so it never affects interactions.
+document.body.classList.add('boot');
+window.addEventListener('load', () => {
+    setTimeout(() => document.body.classList.remove('boot'), 1400);
+});

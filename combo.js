@@ -338,6 +338,9 @@ function openComboModal() {
 function setupComboGenerator() {
     loadComboState();
 
+    // Trigger buttons were removed from the UI — nothing left to bind
+    if (!document.getElementById('comboModal')) return;
+
     const open = () => openComboModal();
     const btnDesktop = document.getElementById('btnComboGen');
     const btnMobile = document.getElementById('btnComboGenM');
