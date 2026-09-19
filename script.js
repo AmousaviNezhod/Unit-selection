@@ -89,6 +89,7 @@ const state = {
     pendingConflict: null,  // {courseId, conflicts, conflictIds, replaceIds} while the conflict modal is open
     schedules: [],          // [{ id, name, courses: [] }] — one entry per tab
     activeScheduleId: '',   // Currently shown schedule tab
+    overlaySchedule: null,  // { name, ids, color, source: 'tab'|'friend' } — ghost comparison layer on the table
     pendingShareValidations: null, // Validation overrides carried by a share link
     futureValidationOverrides: null, // Overrides auto-applied to newly created tabs
     history: {},            // Per-tab undo/redo stacks: { tabId: { stack: [ids[]], pointer } }
@@ -333,7 +334,6 @@ const elements = {
     btnFitTable: document.getElementById('btnFitTable'),
     btnBannerRestoreDefault: document.getElementById('btnBannerRestoreDefault'),
     btnIo: document.getElementById('btnIo'),
-    btnIoM: document.getElementById('btnIoM'),
     btnUndo: document.getElementById('btnUndo'),
     btnRedo: document.getElementById('btnRedo'),
     btnUndoM: document.getElementById('btnUndoM'),
@@ -346,8 +346,6 @@ const elements = {
     dockBackdrop: document.getElementById('dockBackdrop'),
     btnAiPlanM: document.getElementById('btnAiPlanM'),
     btnViewListM: document.getElementById('btnViewListM'),
-    btnCopyTableM: document.getElementById('btnCopyTableM'),
-    btnExportPDFM: document.getElementById('btnExportPDFM'),
     btnCustomDataM: document.getElementById('btnCustomDataM'),
     btnShareLinkM: document.getElementById('btnShareLinkM'),
     btnResetM: document.getElementById('btnResetM'),
@@ -479,6 +477,16 @@ const elements = {
 
     // AI planner modal (برنامه‌ریزی با هوش مصنوعی)
     aiPlanModal: document.getElementById('aiPlanModal'),
+    compareModal: document.getElementById('compareModal'),
+    compareGrid: document.getElementById('compareGrid'),
+    syncModal: document.getElementById('syncModal'),
+    syncInput: document.getElementById('syncInput'),
+    syncResult: document.getElementById('syncResult'),
+    exportsModal: document.getElementById('exportsModal'),
+    overlayModal: document.getElementById('overlayModal'),
+    overlayPickerList: document.getElementById('overlayPickerList'),
+    overlayLegend: document.getElementById('overlayLegend'),
+    overlayLegendName: document.getElementById('overlayLegendName'),
     closeAiPlanModal: document.getElementById('closeAiPlanModal'),
     btnCloseAiPlanFooter: document.getElementById('btnCloseAiPlanFooter'),
     aiPassedSearch: document.getElementById('aiPassedSearch'),
@@ -1835,6 +1843,7 @@ function duplicateSchedule(id) {
     state.schedules.push(copy);
     switchSchedule(newId);
     renderScheduleTabs();
+    syncOverlayAfterSchedulesChange();
     showToast(`"${tab.name}" کپی شد → "${copy.name}" (${toPersianNumber(copy.courses.length)} درس)`, 'success');
 }
 
@@ -1885,7 +1894,27 @@ function deleteSchedule(id) {
     }
     saveSchedules();
     renderScheduleTabs();
+    syncOverlayAfterSchedulesChange();
     showToast(`"${tab.name}" حذف شد`, 'info');
+}
+
+/** Keep the overlay layer pointing at the live data: re-resolve its tab,
+ *  drop it when the tab was deleted, refresh ids + name + color */
+function syncOverlayAfterSchedulesChange() {
+    if (!state.overlaySchedule) return;
+    if (state.overlaySchedule.source !== 'tab') return; // friend overlay: static snapshot
+    const tab = state.schedules.find(t => t.id === state.overlaySchedule.tabId);
+    if (!tab) {
+        exitOverlayMode();
+        showToast('برنامه‌ی مقایسه حذف شد — مقایسه روی جدول پایان یافت', 'info');
+        return;
+    }
+    state.overlaySchedule.name = tab.name;
+    state.overlaySchedule.ids = [...tab.courses];
+    state.overlaySchedule.color = OVERLAY_PALETTE[state.schedules.indexOf(tab) % OVERLAY_PALETTE.length];
+    lastRenderWasStructural = true;
+    renderSchedule();
+    updateOverlayLegend();
 }
 
 /** Rename a tab via prompt */
@@ -1899,6 +1928,7 @@ function renameSchedule(id) {
     tab.name = trimmed.slice(0, 40);
     saveSchedules();
     renderScheduleTabs();
+    syncOverlayAfterSchedulesChange();
 }
 
 // ── Tab context menu (right-click on desktop, long-press on mobile) ──
@@ -2007,10 +2037,138 @@ function bindTabContextMenu(chip, tabId) {
     chip.addEventListener('touchcancel', cancelPress, { passive: true });
 }
 
-/** Render the tab chips above the schedule table */
-function renderScheduleTabs() {
+/** Mobile viewport: tabs collapse into a dropdown (trigger button + menu) */
+function renderScheduleTabsMobile() {
     const host = elements.scheduleTabs;
     if (!host) return;
+    host.innerHTML = '';
+    host.classList.add('schedule-tabs-dropdown');
+
+    const active = state.schedules.find(t => t.id === state.activeScheduleId);
+    const activeVal = active ? countDisabledValidations(active) : 0;
+
+    // Trigger: shows the ACTIVE tab's name/count — one compact row, never wraps
+    const trigger = document.createElement('button');
+    trigger.type = 'button';
+    trigger.className = 'schedule-tabs-trigger' + (active ? '' : ' empty');
+    trigger.setAttribute('aria-haspopup', 'listbox');
+    trigger.setAttribute('aria-expanded', 'false');
+    trigger.innerHTML = `
+        <span class="schedule-tab-name">${active ? escapeHtml(active.name) : 'برنامه‌ای نیست'}</span>
+        ${active ? `<span class="schedule-tab-count">${toPersianNumber(state.selectedCourses.length)}</span>` : ''}
+        ${activeVal > 0 ? `<span class="schedule-tab-val-badge" title="${toPersianNumber(activeVal)} ولیدیشن خاموش">${toPersianNumber(activeVal)}</span>` : ''}
+        <svg class="tabs-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
+    trigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleScheduleTabsDropdown();
+    });
+    host.appendChild(trigger);
+
+    // Dropdown menu: every schedule as a row with its own actions
+    const menu = document.createElement('div');
+    menu.className = 'schedule-tabs-menu';
+    menu.id = 'scheduleTabsMenu';
+    menu.hidden = true;
+
+    state.schedules.forEach(tab => {
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'schedule-tabs-option' + (tab.id === state.activeScheduleId ? ' active' : '');
+        row.setAttribute('role', 'option');
+        row.dataset.tabId = String(tab.id);
+        const offCount = countDisabledValidations(tab);
+        row.innerHTML = `
+            <span class="schedule-tab-name">${escapeHtml(tab.name)}</span>
+            ${offCount > 0 ? `<span class="schedule-tab-val-badge" title="${toPersianNumber(offCount)} ولیدیشن خاموش">${toPersianNumber(offCount)}</span>` : ''}
+            <span class="schedule-tab-count">${toPersianNumber(tab.id === state.activeScheduleId ? state.selectedCourses.length : tab.courses.length)}</span>
+            <span class="schedule-tabs-row-actions">
+                <button type="button" class="schedule-tab-duplicate" aria-label="کپی ${escapeHtml(tab.name)}" title="کپی در برنامه جدید">⧉</button>
+                ${state.schedules.length > 1 ? `<button type="button" class="schedule-tab-delete" aria-label="حذف ${escapeHtml(tab.name)}" title="حذف برنامه">×</button>` : ''}
+            </span>`;
+
+        // Row click = switch; action buttons stopPropagation
+        row.addEventListener('click', (e) => {
+            if (e.target.closest('.schedule-tab-duplicate, .schedule-tab-delete')) return;
+            switchSchedule(tab.id);
+            closeScheduleTabsDropdown();
+        });
+        row.querySelector('.schedule-tab-duplicate').addEventListener('click', (e) => {
+            e.stopPropagation();
+            duplicateSchedule(tab.id);
+            closeScheduleTabsDropdown();
+        });
+        const delBtn = row.querySelector('.schedule-tab-delete');
+        if (delBtn) delBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            deleteSchedule(tab.id);
+            closeScheduleTabsDropdown();
+        });
+        // Long-press on the row = rename (mobile standard) — reuse the context menu
+        bindTabContextMenu(row, tab.id);
+
+        menu.appendChild(row);
+    });
+
+    // "New schedule" row at the bottom
+    if (state.schedules.length < CONFIG.MAX_SCHEDULES) {
+        const add = document.createElement('button');
+        add.type = 'button';
+        add.className = 'schedule-tabs-add-row';
+        add.innerHTML = `<span class="schedule-tabs-add-plus">+</span> برنامه جدید`;
+        add.addEventListener('click', () => {
+            createSchedule();
+            closeScheduleTabsDropdown();
+        });
+        menu.appendChild(add);
+    }
+
+    host.appendChild(menu);
+}
+
+function toggleScheduleTabsDropdown() {
+    const menu = document.getElementById('scheduleTabsMenu');
+    if (!menu) return;
+    if (menu.hidden) openScheduleTabsDropdown();
+    else closeScheduleTabsDropdown();
+}
+
+function openScheduleTabsDropdown() {
+    const menu = document.getElementById('scheduleTabsMenu');
+    const trigger = elements.scheduleTabs.querySelector('.schedule-tabs-trigger');
+    if (!menu || !trigger) return;
+    menu.hidden = false;
+    requestAnimationFrame(() => menu.classList.add('open'));
+    trigger.classList.add('open');
+    trigger.setAttribute('aria-expanded', 'true');
+}
+
+function closeScheduleTabsDropdown() {
+    const menu = document.getElementById('scheduleTabsMenu');
+    const trigger = elements.scheduleTabs.querySelector('.schedule-tabs-trigger');
+    if (!menu || menu.hidden) return;
+    menu.classList.remove('open');
+    if (trigger) {
+        trigger.classList.remove('open');
+        trigger.setAttribute('aria-expanded', 'false');
+    }
+    setTimeout(() => { menu.hidden = true; }, 180);
+}
+
+document.addEventListener('click', (e) => {
+    const host = document.getElementById('scheduleTabs');
+    if (host && !host.contains(e.target)) closeScheduleTabsDropdown();
+});
+
+/** Render the tab chips above the schedule table (desktop) or the
+ *  dropdown trigger+menu (mobile — the chips row would eat the header) */
+function renderScheduleTabs() {
+    if (window.matchMedia('(max-width: 1023px)').matches) {
+        renderScheduleTabsMobile();
+        return;
+    }
+    const host = elements.scheduleTabs;
+    if (!host) return;
+    host.classList.remove('schedule-tabs-dropdown');
     host.innerHTML = '';
 
     state.schedules.forEach(tab => {
@@ -2770,22 +2928,70 @@ function renderSchedule() {
         buildScheduleTable(hours);
     }
 
-    elements.scheduleBody.querySelectorAll('.course-block').forEach(el => el.remove());
     elements.scheduleBody.querySelectorAll('.ghost-trail').forEach(el => el.remove());
+
+    // ── Diff against the previous render ─────────────────────────
+    // Rebuild map of every rendered slot → "courseId|start|end|day|parity"
+    const fresh = {};
+    const wants = {};
+    // Identity of the previous render: if the table was rebuilt (hours changed
+    // / tab switch) the whole DOM is new → play the structural entrance.
+    // Otherwise diff old-vs-new keys and animate only the delta.
+    const prevKeys = state._prevBlockKeys || null;
+    const structural = lastRenderWasStructural || !prevKeys;
+    state.selectedCourses.forEach(courseId => {
+        const course = findCourseById(courseId);
+        if (!course) return;
+        course.schedule.forEach(slot => {
+            wants[`${courseId}|${slot.start}|${slot.end}|${slot.day}|${slot.parity || ''}`] = slot;
+        });
+    });
+
+    const wrapper = elements.scheduleBody.closest('.table-wrapper');
+    const exiting = [];
+    elements.scheduleBody.querySelectorAll('.course-block').forEach(el => {
+        const key = `${el.dataset.courseId}|${el.dataset.start}|${el.dataset.end}|${el.dataset.day}|${el.dataset.parity || ''}`;
+        if (wants[key] && !fresh[key]) {
+            fresh[key] = el; // unchanged block: kept in place, zero animation
+        } else {
+            el.remove(); // changed slot / moved course
+            if (wrapper) exiting.push(cloneBlockForExit(el));
+        }
+    });
 
     state.selectedCourses.forEach(courseId => {
         const course = findCourseById(courseId);
         if (!course) return;
-        course.schedule.forEach(slot => renderCourseBlock(course, slot));
+        course.schedule.forEach(slot => {
+            const key = `${courseId}|${slot.start}|${slot.end}|${slot.day}|${slot.parity || ''}`;
+            if (!fresh[key]) renderCourseBlock(course, slot); // new block
+        });
     });
 
-    // Springy settle for the blocks on screen (cheap: ≤ ~20 elements).
-    // @starting-style covers no-JS/reduced-motion; this adds the spring.
-    if (window.Motion && lastRenderWasStructural) {
-        Motion.blocksIn(elements.scheduleBody.querySelectorAll('.course-block'));
-    }
-    lastRenderWasStructural = true;
+    // Animate ONLY what changed: enter for new blocks, exit for removed ones.
+    // Tab switch / table rebuild → fresh DOM, everything enters (structural).
+    // Collect this render's keys for the next diff
+    const newKeys = {};
+    elements.scheduleBody.querySelectorAll('.course-block').forEach(el => {
+        newKeys[`${el.dataset.courseId}|${el.dataset.start}|${el.dataset.end}|${el.dataset.day}|${el.dataset.parity || ''}`] = 1;
+    });
+    state._prevBlockKeys = newKeys;
 
+    if (window.Motion) {
+        if (structural) {
+            Motion.blocksIn(elements.scheduleBody.querySelectorAll('.course-block'));
+        } else {
+            const addedEls = Object.keys(newKeys).filter(k => !prevKeys[k])
+                .map(k => elements.scheduleBody.querySelector(
+                    `.course-block[data-course-id="${CSS.escape(k.split('|')[0])}"][data-start="${CSS.escape(k.split('|')[1])}"][data-day="${CSS.escape(k.split('|')[3])}"]`))
+                .filter(Boolean);
+            Motion.blocksIn(addedEls);
+            if (exiting.length) Motion.blockOut(exiting);
+        }
+    }
+    lastRenderWasStructural = false; // consumed — next render diffs by default
+
+    renderOverlayBlocks();
     renderNotimeChips();
 }
 
@@ -2795,7 +3001,7 @@ let lastRenderWasStructural = true;
 /** Union of base grid hours + every hour covered by selected courses */
 function getScheduleHours() {
     const hours = new Set(CONFIG.HOURS);
-    state.selectedCourses.forEach(id => {
+    const collect = (id) => {
         const course = findCourseById(id);
         if (!course) return;
         course.schedule.forEach(s => {
@@ -2803,7 +3009,10 @@ function getScheduleHours() {
             const end = parseTime(s.end);
             for (let h = start; h < end && h < 24; h++) hours.add(h);
         });
-    });
+    };
+    state.selectedCourses.forEach(collect);
+    // Comparison overlay widens the grid too (its blocks need real cells)
+    if (state.overlaySchedule) state.overlaySchedule.ids.forEach(collect);
     return Array.from(hours).sort((a, b) => a - b);
 }
 
@@ -2875,6 +3084,32 @@ function renderNotimeChips() {
     cell.closest('tr').style.display = cell.children.length ? '' : 'none';
 }
 
+/** Static snapshot clone of a block for its exit animation — appended to
+ *  the table wrapper (absolute) while the real block is already gone */
+function cloneBlockForExit(el) {
+    const clone = el.cloneNode(true);
+    clone.dataset.courseId = el.dataset.courseId;
+    const cell = el.parentElement;
+    const wrapper = elements.scheduleBody.closest('.table-wrapper');
+    if (!cell || !wrapper) return clone; // caller discards on onComplete
+    const cr = cell.getBoundingClientRect();
+    const wr = wrapper.getBoundingClientRect();
+    const rect = el.getBoundingClientRect();
+    clone.style.left = `${Math.round(rect.left - wr.left)}px`;
+    clone.style.top = `${Math.round(rect.top - wr.top)}px`;
+    clone.style.width = `${Math.round(rect.width)}px`;
+    clone.style.height = `${Math.round(rect.height)}px`;
+    clone.style.right = 'auto';
+    clone.style.bottom = 'auto';
+    clone.style.position = 'absolute';
+    clone.style.zIndex = '30';
+    clone.style.margin = '0';
+    clone.style.pointerEvents = 'none';
+    clone.style.top = `${Math.round(cr.top - wr.top) + 3}px`;
+    wrapper.appendChild(clone);
+    return clone;
+}
+
 /** Shared factory: block element with content + click handler (no positioning) */
 function createCourseBlock(course, slot, extraClass) {
     const block = document.createElement('div');
@@ -2885,6 +3120,12 @@ function createCourseBlock(course, slot, extraClass) {
     if (isShareOrigin(state.activeScheduleId, getCourseId(course))) block.classList.add('course-block-share');
     block.style.backgroundColor = course.color;
     block.dataset.courseId = getCourseId(course);
+    // Slot geometry for diff-based re-renders: unchanged blocks are kept
+    // in place, only added/removed ones animate
+    block.dataset.start = String(slot.start);
+    block.dataset.end = String(slot.end);
+    block.dataset.day = String(slot.day);
+    if (slot.parity) block.dataset.parity = String(slot.parity);
     block.innerHTML = `
         ${parity ? `<span class="course-block-parity">${parity}</span>` : ''}
         ${course.isException ? '<span class="course-block-origin" title="در دیتای فعلی نیست — استثنا از دیتای قبلی">⭯</span>' : ''}
@@ -3084,6 +3325,480 @@ function renderTransposedSchedule() {
     });
 
     renderNotimeChips();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ICS CALENDAR EXPORT — standard .ics file for Google Calendar /
+// any phone calendar app. Pure client-side, no dependencies.
+// ═══════════════════════════════════════════════════════════════
+
+/** ICS needs concrete gregorian dates: anchor the recurring weekly events
+ *  on the coming Saturday (شنبه — the Iranian first weekday). Students
+ *  re-import each term; RRULE keeps sessions weekly. */
+function icsFirstOccurrenceDate() {
+    const now = new Date();
+    const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+    const daysUntilSaturday = (6 - d.getUTCDay() + 7) % 7;
+    d.setUTCDate(d.getUTCDate() + daysUntilSaturday);
+    return d;
+}
+
+function icsStamp(d) {
+    return d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+}
+
+/** Build the RFC 5545 ICS text for every selected course's sessions.
+ *  Class times are Tehran local (UTC+3:30) — declared via TZID-free
+ *  floating local time to keep the file dependency-free. */
+function buildIcsContent() {
+    const firstSaturday = icsFirstOccurrenceDate();
+    const dayIndex = { 'شنبه': 0, 'یکشنبه': 1, 'دوشنبه': 2, 'سه‌شنبه': 3, 'چهارشنبه': 4, 'پنجشنبه': 5 };
+    const byDay = ['SA', 'SU', 'MO', 'TU', 'WE', 'TH'];
+
+    const lines = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//Unit Selection Scheduler//FA//',
+        'CALSCALE:GREGORIAN',
+        'METHOD:PUBLISH',
+        'X-WR-CALNAME:برنامه واحد ترم',
+        'X-WR-TIMEZONE:Asia/Tehran'
+    ];
+
+    let uidCounter = 0;
+    state.selectedCourses.forEach(courseId => {
+        const course = findCourseById(courseId);
+        if (!course || !course.schedule.length) return;
+        course.schedule.forEach(slot => {
+            const di = dayIndex[slot.day];
+            if (di === undefined) return;
+            const dayBase = new Date(firstSaturday);
+            dayBase.setUTCDate(dayBase.getUTCDate() + di);
+            const t0 = parseTime(slot.start);
+            const t1 = parseTime(slot.end);
+            // Floating local time (no Z suffix) — calendars treat it as local,
+            // which is exactly right for a Tehran class schedule.
+            const fmt = (h, m) => `${String(h).padStart(2, '0')}${String(m).padStart(2, '0')}00`;
+            const dtStart = `${icsStamp(dayBase).slice(0, 8)}T${fmt(Math.floor(t0), Math.round((t0 % 1) * 60))}`;
+            const dtEnd = `${icsStamp(dayBase).slice(0, 8)}T${fmt(Math.floor(t1), Math.round((t1 % 1) * 60))}`;
+
+            const summary = `${course.name} (گروه ${course.group})`;
+            const desc = [
+                `استاد: ${course.professor}`,
+                `کد درس: ${course.code}`,
+                `واحد: ${formatUnits(course.units)}`
+            ].join('\\n');
+
+            lines.push(
+                'BEGIN:VEVENT',
+                `UID:unit-${Date.now()}-${uidCounter++}@unit-selection`,
+                `DTSTAMP:${icsStamp(new Date())}`,
+                `DTSTART:${dtStart}`,
+                `DTEND:${dtEnd}`,
+                `SUMMARY:${summary}`,
+                `DESCRIPTION:${desc}`,
+                `RRULE:FREQ=WEEKLY;BYDAY=${byDay[di]}`,
+                'END:VEVENT'
+            );
+        });
+    });
+
+    lines.push('END:VCALENDAR');
+    return lines.join('\r\n');
+}
+
+/** Download the active schedule as .ics */
+function exportIcs() {
+    if (state.selectedCourses.length === 0) {
+        showToast('برنامه خالی است', 'warning');
+        return;
+    }
+    const hasTimed = state.selectedCourses.some(id => {
+        const c = findCourseById(id);
+        return c && c.schedule.length;
+    });
+    if (!hasTimed) {
+        showToast('هیچ درسی ساعت کلاسی ندارد — چیزی برای تقویم نیست', 'warning');
+        return;
+    }
+    try {
+        const blob = new Blob([buildIcsContent()], { type: 'text/calendar;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `schedule-${new Date().toISOString().slice(0, 10)}.ics`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        showToast('فایل تقویم (ICS) دانلود شد — در Google Calendar یا تقویم گوشی Import کنید', 'success');
+    } catch (e) {
+        console.error('ICS export failed:', e);
+        showToast('خطا در ساخت فایل تقویم', 'error');
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SCHEDULE COMPARISON — units/cost/shared/unique across tabs
+// ═══════════════════════════════════════════════════════════════
+
+function openCompareModal() {
+    if (state.schedules.length < 2) {
+        showToast('برای مقایسه حداقل ۲ برنامه لازم است — یک برنامه‌ی دیگر بساز', 'warning');
+        return;
+    }
+    renderCompareModal();
+    elements.compareModal.classList.add('active');
+}
+
+function renderCompareModal() {
+    const grid = elements.compareGrid;
+    const schedules = state.schedules;
+
+    const perSchedule = schedules.map(t => {
+        const courses = t.courses.map(findCourseById).filter(Boolean);
+        const units = courses.reduce((sum, c) => sum + c.units, 0);
+        const cost = courses.reduce((sum, c) => {
+            const p = getCoursePrice(c);
+            return sum + (p ? p * c.units : 0);
+        }, 0);
+        const days = {};
+        courses.forEach(c => c.schedule.forEach(s => {
+            days[s.day] = (days[s.day] || 0) + (parseTime(s.end) - parseTime(s.start));
+        }));
+        return { tab: t, courses, units, cost, days, ids: new Set(courses.map(c => getCourseId(c))) };
+    });
+
+    // shared = present in EVERY schedule
+    const allIds = perSchedule.map(p => p.ids);
+    const shared = [...allIds[0]].filter(id => allIds.every(set => set.has(id)));
+    const sharedNames = shared.map(id => (findCourseById(id) || {}).name).filter(Boolean);
+
+    grid.innerHTML = `
+        <div class="compare-table-wrap">
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th class="compare-metric-head">شاخص</th>
+                        ${perSchedule.map(p => `<th>${escapeHtml(p.tab.name)}${p.tab.id === state.activeScheduleId ? ' <span class="compare-active-tag">فعال</span>' : ''}</th>`).join('')}
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td class="compare-metric">تعداد درس</td>${perSchedule.map(p => `<td>${toPersianNumber(p.courses.length)}</td>`).join('')}</tr>
+                    <tr><td class="compare-metric">جمع واحد</td>${perSchedule.map(p => `<td><strong>${formatUnits(p.units)}</strong></td>`).join('')}</tr>
+                    <tr><td class="compare-metric">جمع هزینه</td>${perSchedule.map(p => `<td>${formatToman(p.cost)}</td>`).join('')}</tr>
+                    <tr><td class="compare-metric">شلوغ‌ترین روزها</td>${perSchedule.map(p => {
+                        const busy = Object.entries(p.days).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([d]) => d);
+                        return `<td>${busy.length ? escapeHtml(busy.join('، ')) : '—'}</td>`;
+                    }).join('')}</tr>
+                    <tr><td class="compare-metric">دروس منحصربه‌فرد</td>${perSchedule.map(p => {
+                        const uniq = [...p.ids].filter(id => !allIds.some(o => o !== p.ids && o.has(id)));
+                        return `<td>${toPersianNumber(uniq.length)}</td>`;
+                    }).join('')}</tr>
+                </tbody>
+            </table>
+        </div>
+        ${sharedNames.length ? `
+            <div class="compare-shared">
+                <span class="compare-shared-label">دروس مشترک (${toPersianNumber(sharedNames.length)}):</span>
+                ${sharedNames.map(n => `<span class="compare-shared-chip">${escapeHtml(n)}</span>`).join('')}
+            </div>` : ''}
+        <div class="compare-note">مقایسه بر اساس دروس ثبت‌شده در هر برنامه است — هزینه‌های نامشخص محاسبه نمی‌شوند.</div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FRIEND TIME-SYNC — paste a friend's share link, find shared
+// courses + common free slots (everything client-side)
+// ═══════════════════════════════════════════════════════════════
+
+function openSyncModal() {
+    elements.syncInput.value = '';
+    elements.syncResult.hidden = true;
+    elements.syncModal.classList.add('active');
+    setTimeout(() => elements.syncInput.focus(), 250);
+}
+
+function runFriendSync() {
+    const raw = elements.syncInput.value.trim();
+    if (!raw) {
+        showToast('لینک شیر دوستت را اینجا بگذار', 'warning');
+        return;
+    }
+
+    let payload;
+    try {
+        const hashIdx = raw.indexOf('#');
+        if (hashIdx === -1) throw new Error('no hash');
+        payload = JSON.parse(decodeURIComponent(escape(atob(raw.slice(hashIdx + 1)))));
+    } catch (e) {
+        showToast('لینک نامعتبر است — لینک شیر برنامه را کامل paste کن', 'error');
+        return;
+    }
+    const friendIds = Array.isArray(payload.c) ? payload.c.filter(id => typeof id === 'string') : [];
+    if (!friendIds.length) {
+        showToast('برنامه‌ی دوستت خالی است', 'warning');
+        return;
+    }
+
+    const all = [...state.defaultCourses, ...state.customCourses];
+    const known = new Set(all.map(c => getCourseId(c)));
+    const friendCourses = friendIds.map(id => findCourseById(id)).filter(Boolean);
+    const unknownCount = friendIds.filter(id => !known.has(id)).length;
+
+    const myIds = new Set(state.selectedCourses);
+    const sharedIds = friendIds.filter(id => myIds.has(id));
+    const sharedCourses = sharedIds.map(id => findCourseById(id)).filter(Boolean);
+
+    // Busy intervals per day: mine + friend's valid courses
+    const myCourses = state.selectedCourses.map(id => findCourseById(id)).filter(Boolean);
+    const busy = { mine: {}, friend: {} };
+    const addBusy = (map, course) => course.schedule.forEach(s => {
+        (map[s.day] = map[s.day] || []).push([parseTime(s.start), parseTime(s.end)]);
+    });
+    myCourses.forEach(c => addBusy(busy.mine, c));
+    friendCourses.forEach(c => addBusy(busy.friend, c));
+
+    // Common free gaps per day (≥ 60min inside the 7..20 open window)
+    const OPEN = 7, CLOSE = 20, MIN_GAP = 1;
+    const freeSlots = [];
+    CONFIG.DAYS.forEach(day => {
+        const merged = [...(busy.mine[day] || []), ...(busy.friend[day] || [])]
+            .sort((a, b) => a[0] - b[0]);
+        let cursor = OPEN;
+        const dayFree = [];
+        merged.forEach(([s, e]) => {
+            if (s - cursor >= MIN_GAP) dayFree.push([cursor, Math.min(s, CLOSE)]);
+            cursor = Math.max(cursor, e);
+        });
+        if (CLOSE - cursor >= MIN_GAP) dayFree.push([cursor, CLOSE]);
+        if (dayFree.length) {
+            freeSlots.push({
+                day,
+                ranges: dayFree.map(([a, b]) => `${minutesToTime(Math.round(a * 60))}–${minutesToTime(Math.round(b * 60))}`)
+            });
+        }
+    });
+
+    renderSyncResult(friendCourses, sharedCourses, freeSlots, unknownCount);
+}
+
+function renderSyncResult(friendCourses, sharedCourses, freeSlots, unknownCount) {
+    const box = elements.syncResult;
+    const sharedNames = sharedCourses.map(c => c.name);
+    const sharedSet = new Set(sharedCourses);
+    const friendOnly = friendCourses.filter(c => !sharedSet.has(c));
+
+    box.innerHTML = `
+        <div class="sync-section">
+            <div class="sync-stat-row">
+                <div class="sync-stat"><span class="sync-stat-value">${toPersianNumber(friendCourses.length)}</span><span class="sync-stat-label">درس دوستت</span></div>
+                <div class="sync-stat shared"><span class="sync-stat-value">${toPersianNumber(sharedCourses.length)}</span><span class="sync-stat-label">مشترک</span></div>
+                <div class="sync-stat"><span class="sync-stat-value">${toPersianNumber(freeSlots.length)}</span><span class="sync-stat-label">روز با وقت آزاد مشترک</span></div>
+            </div>
+            ${unknownCount ? `<div class="sync-warn">${toPersianNumber(unknownCount)} درس از برنامه‌ی دوستت در دیتای فعلی پیدا نشد.</div>` : ''}
+        </div>
+
+        <div class="sync-section">
+            <h4 class="sync-section-title">👥 دروس مشترک</h4>
+            ${sharedNames.length
+                ? `<div class="sync-chips">${sharedNames.map(n => `<span class="sync-chip shared">${escapeHtml(n)}</span>`).join('')}</div>`
+                : '<div class="sync-empty">هیچ درس مشترکی ندارید</div>'}
+            ${friendOnly.length ? `
+                <h4 class="sync-section-title">📚 فقط برنامه‌ی دوستت</h4>
+                <div class="sync-chips">${friendOnly.slice(0, 12).map(c => `<span class="sync-chip">${escapeHtml(c.name)}</span>`).join('')}${friendOnly.length > 12 ? `<span class="sync-chip more">+${toPersianNumber(friendOnly.length - 12)}</span>` : ''}</div>` : ''}
+        </div>
+
+        <div class="sync-section">
+            <h4 class="sync-section-title">🕐 وقت‌های آزاد مشترک (هر دو خالی هستید)</h4>
+            ${freeSlots.length ? `
+                <div class="sync-free-grid">
+                    ${freeSlots.map(f => `
+                        <div class="sync-free-row">
+                            <span class="sync-free-day">${escapeHtml(f.day)}</span>
+                            <span class="sync-free-ranges">${f.ranges.map(r => `<span class="sync-free-range">${toPersianTime(r)}</span>`).join('')}</span>
+                        </div>`).join('')}
+                </div>`
+                : '<div class="sync-empty">هیچ بازه‌ی آزاد مشترکی پیدا نشد</div>'}
+        </div>`;
+    box.hidden = false;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TABLE COMPARISON OVERLAY — a second schedule rendered as ghost
+// blocks on their own sub-line (second line) of every day row.
+// Sources: another one of my tabs, or a friend's share link.
+// ═══════════════════════════════════════════════════════════════
+
+/** Palette for overlay layers — muted violet family, distinct from
+ *  course colors (which come from the course palette) */
+const OVERLAY_PALETTE = ['#8b7cf6', '#6fb3f0', '#f08fb0', '#f0c06f', '#7fd0a8'];
+
+/** Turn the overlay ON for another tab of mine */
+function openOverlayPicker() {
+    if (state.schedules.length < 2) {
+        showToast('برای مقایسه حداقل ۲ برنامه لازم است — یکی دیگر بساز یا لینک دوستت را بگذار', 'warning');
+        return;
+    }
+    renderOverlayPickerRows();
+    elements.overlayModal.classList.add('active');
+}
+
+function renderOverlayPickerRows() {
+    const host = elements.overlayPickerList;
+    host.innerHTML = '';
+    state.schedules.forEach(tab => {
+        const isActive = tab.id === state.activeScheduleId;
+        const isOverlay = state.overlaySchedule && state.overlaySchedule.tabId === tab.id;
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'overlay-picker-row' + (isOverlay ? ' active' : '') + (isActive ? ' current' : '');
+        row.disabled = isActive;
+        row.innerHTML = `
+            <span class="overlay-picker-name">${escapeHtml(tab.name)}${isActive ? ' <span class="overlay-current-tag">(فعال)</span>' : ''}</span>
+            <span class="schedule-tab-count">${toPersianNumber(tab.courses.length)}</span>
+            ${isOverlay ? '<span class="overlay-on-tag">روی جدول</span>' : ''}`;
+        row.addEventListener('click', () => {
+            setOverlayFromTab(tab.id);
+            elements.overlayModal.classList.remove('active');
+        });
+        host.appendChild(row);
+    });
+}
+
+function setOverlayFromTab(tabId) {
+    const tab = state.schedules.find(t => t.id === tabId);
+    if (!tab) return;
+    const color = OVERLAY_PALETTE[state.schedules.indexOf(tab) % OVERLAY_PALETTE.length];
+    state.overlaySchedule = { name: tab.name, ids: [...tab.courses], color, source: 'tab', tabId: tab.id };
+    enterOverlayMode();
+}
+
+/** Turn the overlay ON from a friend's share link (parsed payload ids) */
+function setOverlayFromFriendLink(rawLink) {
+    let payload;
+    try {
+        const hashIdx = rawLink.indexOf('#');
+        if (hashIdx === -1) throw new Error('no hash');
+        payload = JSON.parse(decodeURIComponent(escape(atob(rawLink.slice(hashIdx + 1)))));
+    } catch (e) {
+        showToast('لینک نامعتبر است — لینک شیر برنامه را کامل paste کن', 'error');
+        return false;
+    }
+    const ids = Array.isArray(payload.c) ? payload.c.filter(id => typeof id === 'string') : [];
+    const valid = ids.map(id => findCourseById(id)).filter(Boolean);
+    if (!valid.length) {
+        showToast('هیچ درسی از این برنامه در دیتای فعلی پیدا نشد', 'warning');
+        return false;
+    }
+    state.overlaySchedule = {
+        name: 'برنامه دوست',
+        ids: valid.map(c => getCourseId(c)),
+        color: OVERLAY_PALETTE[0],
+        source: 'friend'
+    };
+    enterOverlayMode();
+    return true;
+}
+
+function enterOverlayMode() {
+    elements.scheduleContainer.classList.add('compare-overlay-mode');
+    lastRenderWasStructural = true; // grid may widen → rebuild plays entrance
+    renderSchedule();
+    updateOverlayLegend();
+    showToast(`مقایسه روی جدول فعال شد — «${state.overlaySchedule.name}» با رنگ بنفش زیر برنامه‌ی خودت`, 'info');
+}
+
+function exitOverlayMode() {
+    state.overlaySchedule = null;
+    elements.scheduleContainer.classList.remove('compare-overlay-mode');
+    lastRenderWasStructural = true;
+    renderSchedule();
+    updateOverlayLegend();
+}
+
+function toggleOverlayMode() {
+    if (state.overlaySchedule) exitOverlayMode();
+    else openOverlayPicker();
+}
+
+/** Ghost blocks: rendered into each day's second sub-line */
+function renderOverlayBlocks() {
+    if (!state.overlaySchedule) return;
+    const ov = state.overlaySchedule;
+    ov.ids.forEach(courseId => {
+        const course = findCourseById(courseId);
+        if (!course) return;
+        course.schedule.forEach(slot => {
+            const startCell = elements.scheduleBody.querySelector(
+                `tr[data-day="${slot.day}"] td[data-hour="${Math.floor(parseTime(slot.start))}"]`);
+            if (!startCell) return;
+            const block = createCourseBlock(course, slot, 'course-block-overlay');
+            block.style.backgroundColor = ov.color;
+            // RTL anchoring identical to normal blocks
+            const t0 = parseTime(slot.start);
+            const duration = parseTime(slot.end) - t0;
+            const startHour = Math.floor(t0);
+            const offsetPercent = ((t0 - startHour) / 1) * 100;
+            block.style.right = `${offsetPercent}%`;
+            block.style.width = `${duration * 100}%`;
+            startCell.appendChild(block);
+        });
+    });
+}
+
+/** Legend banner between header and table */
+function updateOverlayLegend() {
+    const legend = elements.overlayLegend;
+    if (!legend) return;
+    if (!state.overlaySchedule) {
+        legend.hidden = true;
+        return;
+    }
+    legend.hidden = false;
+    elements.overlayLegendName.textContent = state.overlaySchedule.name;
+    legend.style.setProperty('--overlay-color', state.overlaySchedule.color);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// EXPORTS HUB — one modal for every way out of the app
+// ═══════════════════════════════════════════════════════════════
+
+function openExportsModal() {
+    elements.exportsModal.classList.add('active');
+}
+
+function closeExportsModal() {
+    elements.exportsModal.classList.remove('active');
+}
+
+/** Wire every export card to its action; most close the hub first
+ *  (modals must not stack), then run the real exporter. */
+function setupExportsHub() {
+    const go = (fn, keepOpen = false) => async () => {
+        if (!keepOpen) closeExportsModal();
+        await new Promise(r => setTimeout(r, 200)); // let the overlay fade
+        await fn();
+    };
+    document.getElementById('expPdf').addEventListener('click', go(exportPDF));
+    document.getElementById('expIcs').addEventListener('click', go(exportIcs));
+    document.getElementById('expCopy').addEventListener('click', go(copyToClipboard));
+    document.getElementById('expShare').addEventListener('click', go(shareSchedule));
+    document.getElementById('expJson').addEventListener('click', go(exportIoOpen));
+    document.getElementById('expImport').addEventListener('click', go(importIoOpen));
+    document.getElementById('expPortal').addEventListener('click', go(async () => {
+        if (state.selectedCourses.length === 0) {
+            showToast('اول درس انتخاب کنید', 'warning');
+            return;
+        }
+        renderCostModal();
+        elements.costModal.classList.add('active');
+        // scroll to the portal script section
+        setTimeout(() => {
+            const step = elements.costModal.querySelector('.cost-script-step');
+            if (step) step.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 250);
+    }));
+    document.getElementById('closeExportsModal').addEventListener('click', closeExportsModal);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -3523,37 +4238,70 @@ function renderCostModal() {
     }
 
     let unknown = 0;
-    const rows = courses.map((course, index) => {
-        const unitPrice = getCoursePrice(course);
-        const total = unitPrice * course.units;
-        if (!unitPrice) unknown++;
-        return `
-            <tr>
-                <td>${toPersianNumber(index + 1)}</td>
-                <td class="cost-cell-name">${escapeHtml(course.name)}</td>
-                <td>${toPersianNumber(course.code)}</td>
-                <td>${formatUnits(course.units)}</td>
-                <td>${unitPrice ? formatToman(unitPrice) : 'نامشخص'}</td>
-                <td class="cost-cell-total">${unitPrice ? formatToman(total) : '—'}</td>
-            </tr>`;
-    }).join('');
-
     const total = getTotalCost();
     const unknownLabel = unknown ? `(${toPersianNumber(unknown)} درس قیمت ندارد)` : '';
-    elements.costModalBody.innerHTML = `
-        <table class="cost-table">
-            <thead>
-                <tr><th>#</th><th>نام درس</th><th>کد</th><th>واحد</th><th>مبلغ واحد</th><th>مبلغ کل</th></tr>
-            </thead>
-            <tbody>${rows}</tbody>
-            <tfoot>
+    const unknownInline = unknown ? ` · ${toPersianNumber(unknown)} درس قیمت ندارد` : '';
+
+    // Phone/tablet: the 6-column table is unreadable — render color-coded
+    // cards instead. Desktop (>=1024px) keeps the classic table.
+    const compact = window.matchMedia('(max-width: 1023px)').matches;
+
+    if (compact) {
+        const cards = courses.map(course => {
+            const unitPrice = getCoursePrice(course);
+            const courseTotal = unitPrice * course.units;
+            if (!unitPrice) unknown++;
+            return `
+                <div class="cost-card${unitPrice ? '' : ' cost-card-unknown'}" style="--course-accent:${course.color}">
+                    <div class="cost-card-main">
+                        <span class="cost-card-name">${escapeHtml(course.name)}</span>
+                        <span class="cost-card-sub">کد ${toPersianNumber(course.code)} · ${formatUnits(course.units)} واحد · ${unitPrice ? formatToman(unitPrice) : 'قیمت نامشخص'}</span>
+                    </div>
+                    <div class="cost-card-total">
+                        <span class="cost-card-total-label">مبلغ کل</span>
+                        <span class="cost-card-total-value">${unitPrice ? formatToman(courseTotal) : '—'}</span>
+                    </div>
+                </div>`;
+        }).join('');
+
+        elements.costModalBody.innerHTML = `
+            <div class="cost-list">${cards}</div>
+            <div class="cost-summary-card">
+                <span class="cost-summary-label">جمع کل${unknownInline}</span>
+                <span class="cost-summary-value">${formatToman(total)}</span>
+            </div>
+            ${unknown ? '<div class="cost-note">قیمت بعضی دروس در جدول قیمت پیدا نشد — جمع کل ممکن است ناقص باشد.</div>' : ''}`;
+    } else {
+        const rows = courses.map((course, index) => {
+            const unitPrice = getCoursePrice(course);
+            const courseTotal = unitPrice * course.units;
+            if (!unitPrice) unknown++;
+            return `
                 <tr>
-                    <td colspan="5">جمع کل ${unknownLabel}</td>
-                    <td class="cost-cell-total">${formatToman(total)}</td>
-                </tr>
-            </tfoot>
-        </table>
-        ${unknown ? '<div class="cost-note">قیمت بعضی دروس در جدول قیمت پیدا نشد — جمع کل ممکن است ناقص باشد.</div>' : ''}`;
+                    <td>${toPersianNumber(index + 1)}</td>
+                    <td class="cost-cell-name">${escapeHtml(course.name)}</td>
+                    <td>${toPersianNumber(course.code)}</td>
+                    <td>${formatUnits(course.units)}</td>
+                    <td>${unitPrice ? formatToman(unitPrice) : 'نامشخص'}</td>
+                    <td class="cost-cell-total">${unitPrice ? formatToman(courseTotal) : '—'}</td>
+                </tr>`;
+        }).join('');
+
+        elements.costModalBody.innerHTML = `
+            <table class="cost-table">
+                <thead>
+                    <tr><th>#</th><th>نام درس</th><th>کد</th><th>واحد</th><th>مبلغ واحد</th><th>مبلغ کل</th></tr>
+                </thead>
+                <tbody>${rows}</tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="5">جمع کل ${unknownLabel}</td>
+                        <td class="cost-cell-total">${formatToman(total)}</td>
+                    </tr>
+                </tfoot>
+            </table>
+            ${unknown ? '<div class="cost-note">قیمت بعضی دروس در جدول قیمت پیدا نشد — جمع کل ممکن است ناقص باشد.</div>' : ''}`;
+    }
 
     elements.costScriptBox.value = buildPortalTickScript(courses);
 }
@@ -4950,7 +5698,6 @@ function setIoTab(tab) {
 function setupIoFeature() {
     const open = () => exportIoOpen();
     if (elements.btnIo) elements.btnIo.addEventListener('click', open);
-    if (elements.btnIoM) elements.btnIoM.addEventListener('click', open);
 
     elements.closeIoModal.addEventListener('click', closeAllModals);
 
@@ -5494,12 +6241,40 @@ function setupEventListeners() {
         elements.listModal.classList.add('active');
     });
     bindDock('dockAiPlan', () => elements.btnAiPlan.click());
-    bindDock('dockExportPDF', exportPDF);
-    bindDock('dockCopyTable', copyToClipboard);
-    bindDock('dockShareLink', shareSchedule);
-    bindDock('dockIo', exportIoOpen);
-    bindDock('dockImport', importIoOpen);
+    bindDock('dockExports', openExportsModal);
+    setupExportsHub();
     bindDock('dockCost', openCostModal);
+    bindDock('dockCompare', openCompareModal);
+    bindDock('dockSync', openSyncModal);
+    bindDock('dockOverlay', toggleOverlayMode);
+    document.getElementById('closeCompareModal').addEventListener('click', () => elements.compareModal.classList.remove('active'));
+    document.getElementById('btnCloseCompareModal').addEventListener('click', () => elements.compareModal.classList.remove('active'));
+    document.getElementById('closeSyncModal').addEventListener('click', () => elements.syncModal.classList.remove('active'));
+    document.getElementById('btnCloseSyncModal').addEventListener('click', () => elements.syncModal.classList.remove('active'));
+    document.getElementById('btnRunSync').addEventListener('click', runFriendSync);
+    document.getElementById('closeOverlayModal').addEventListener('click', () => elements.overlayModal.classList.remove('active'));
+    document.getElementById('btnCloseOverlayModal').addEventListener('click', () => elements.overlayModal.classList.remove('active'));
+    document.getElementById('btnOverlayExit').addEventListener('click', exitOverlayMode);
+    // Picker: "from a friend's link" jumps to the sync modal (link lives there)
+    document.getElementById('btnOverlayFriend').addEventListener('click', () => {
+        elements.overlayModal.classList.remove('active');
+        setTimeout(openSyncModal, 220);
+    });
+    // Friend link inside the sync modal can also jump straight to table overlay
+    document.getElementById('btnSyncToOverlay').addEventListener('click', () => {
+        const raw = elements.syncInput.value.trim();
+        elements.syncModal.classList.remove('active');
+        setTimeout(() => { if (setOverlayFromFriendLink(raw)) elements.overlayModal.classList.remove('active'); }, 220);
+    });
+    // Compare modal gets an "overlay on table" action too
+    document.getElementById('btnCompareToOverlay').addEventListener('click', () => {
+        elements.compareModal.classList.remove('active');
+        setTimeout(openOverlayPicker, 220);
+    });
+    elements.syncInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') runFriendSync(); });
+    bindDock('btnCompareM', openCompareModal);
+    bindDock('btnSyncM', openSyncModal);
+    bindDock('btnOverlayM', toggleOverlayMode);
     bindDock('dockCustomData', () => {
         updateCustomDataStatus();
         elements.customDataModal.classList.add('active');
@@ -5553,10 +6328,8 @@ function setupEventListeners() {
         renderSelectedList();
         elements.listModal.classList.add('active');
     });
-    elements.btnCopyTableM.addEventListener('click', copyToClipboard);
-    elements.btnShareLinkM.addEventListener('click', shareSchedule);
+    elements.btnShareLinkM.addEventListener('click', openExportsModal); // share pill = exports hub
     elements.btnCostM.addEventListener('click', openCostModal);
-    elements.btnExportPDFM.addEventListener('click', exportPDF);
     elements.btnResetM.addEventListener('click', resetSchedule);
     elements.btnCustomDataM.addEventListener('click', () => {
         updateCustomDataStatus();
@@ -5608,6 +6381,10 @@ function setupEventListeners() {
     const onViewportChange = () => {
         if (isFitMode()) return; // fit-mode keeps its transposed grid
         renderSchedule();
+        // Tabs re-render: chips (desktop) <-> dropdown (mobile)
+        renderScheduleTabs();
+        // Cost modal switches between table and card layout per breakpoint
+        if (elements.costModal.classList.contains('active')) renderCostModal();
     };
     window.addEventListener('resize', rafThrottle(onViewportChange));
 

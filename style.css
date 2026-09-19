@@ -237,6 +237,17 @@ html {
     -moz-osx-font-smoothing: grayscale;
 }
 
+/* Every text-bearing element inherits the app font — buttons, inputs,
+   selects and textareas do NOT inherit by default (browser default font
+   would leak through wherever a per-component rule was missed) */
+button,
+input,
+select,
+textarea,
+optgroup {
+    font-family: inherit;
+}
+
 body {
     font-family: var(--font-family);
     font-size: var(--font-size-base);
@@ -365,7 +376,7 @@ body.modal-open {
     padding: var(--space-1) var(--space-4);
     background-color: var(--tint);
     border: 1px solid var(--border-primary);
-    border-radius: 999px;
+    border-radius: var(--radius-md); /* same language as selection-summary */
 }
 
 @media (max-width: 1023px) {
@@ -409,7 +420,7 @@ body.modal-open {
     padding: var(--space-2) var(--space-4);
     background-color: var(--tint);
     border: 1px solid var(--border-primary);
-    border-radius: 999px;
+    border-radius: var(--radius-md); /* matches header-stats */
     font-size: var(--font-size-sm);
 }
 
@@ -2672,13 +2683,6 @@ select[data-filter]:hover {
     border-bottom: 1px solid var(--border-primary);
 }
 
-.schedule-title {
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-semibold);
-    color: var(--text-tertiary);
-    white-space: nowrap;
-    margin-inline-end: var(--space-2);
-}
 
 /* ── Multi-schedule tabs (حالت برنامه چندتایی) ─────────────── */
 .schedule-tabs {
@@ -3004,8 +3008,11 @@ select[data-filter]:hover {
     padding: var(--space-3);
 }
 
+/* NOTE: no color-mix() here — this node is cloned into the PDF export and
+   html2canvas 1.4.1 cannot parse modern color functions. Dark/light themes
+   each get an equivalent literal (bg-primary @ 60% over the table bg). */
 .day-row td {
-    background-color: color-mix(in srgb, var(--bg-primary) 60%, transparent);
+    background-color: rgba(10, 10, 10, 0.6);
     border: 1px solid var(--border-primary);
     height: 72px;
     min-width: 62px;
@@ -3016,6 +3023,11 @@ select[data-filter]:hover {
 
 .day-row td:hover {
     background-color: var(--tint);
+}
+
+/* Light theme: equivalent of the dark rgba above (bg-primary #f5f5f5 @ 60%) */
+.light-mode .day-row td {
+    background-color: rgba(245, 245, 245, 0.6);
 }
 
 /* Course Blocks - light-gray chips w/ dark ink; entrance via @starting-style
@@ -3799,7 +3811,7 @@ select[data-filter]:hover {
 
 .kbd {
     display: inline-block;
-    font-family: Consolas, Monaco, monospace;
+    font-family: 'Vazirmatn', Consolas, Monaco, monospace;
     font-size: var(--font-size-xs);
     direction: ltr;
     padding: 1px 6px;
@@ -3854,7 +3866,7 @@ select[data-filter]:hover {
 }
 
 .code-hint {
-    font-family: monospace;
+    font-family: 'Vazirmatn', monospace;
     background-color: var(--bg-tertiary);
     border: 1px solid var(--border-primary);
     padding: 1px 6px;
@@ -3868,7 +3880,7 @@ select[data-filter]:hover {
     width: 100%;
     min-height: 220px;
     padding: var(--space-4);
-    font-family: Consolas, Monaco, monospace;
+    font-family: 'Vazirmatn', Consolas, Monaco, monospace;
     font-size: var(--font-size-xs);
     line-height: 1.6;
     color: var(--text-primary);
@@ -5055,3 +5067,279 @@ select[data-filter]:hover {
     color: var(--warning);
 }
 
+/* ─────────────────────────────────────────────────────────────
+   MOBILE BOTTOM SHEETS — every modal becomes an expandable menu
+   sliding up from the bottom edge (search modal already is one)
+   ───────────────────────────────────────────────────────────── */
+@media (max-width: 1023px) {
+    .modal-overlay {
+        align-items: flex-end;
+        padding: 0;
+    }
+
+    .modal-content,
+    .modal-content.modal-large,
+    .modal-content.modal-small,
+    .modal-content.modal-conflict {
+        max-width: none;
+        width: 100%;
+        margin: 0;
+        max-height: min(88dvh, 88vh);
+        border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+        border-left: none;
+        border-right: none;
+        border-bottom: none;
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    /* Grabber rail: the standard affordance of a draggable sheet */
+    .modal-content::before {
+        content: '';
+        position: absolute;
+        top: 7px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 42px;
+        height: 4px;
+        border-radius: 999px;
+        background: var(--border-focus, #555);
+        opacity: 0.5;
+        pointer-events: none;
+        z-index: 2;
+    }
+
+    /* Bottom sheets slide vertically; center-scale enter/exit replaced */
+    .modal-content {
+        transform: translateY(32px);
+    }
+
+    .modal-overlay.active .modal-content {
+        transform: translateY(0);
+    }
+
+    /* Denser type + tighter paddings for crowded data on small screens */
+    .modal-header {
+        padding: var(--space-4);
+    }
+
+    .modal-body {
+        padding: var(--space-5) var(--space-4);
+        font-size: 14px;
+    }
+
+    .modal-tabs {
+        padding: 0 var(--space-4);
+    }
+
+    .modal-footer {
+        padding: var(--space-4);
+    }
+
+    /* Course info modal: key/value grid wraps into compact columns */
+    .course-info-grid {
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    }
+
+    .course-info-value {
+        font-size: 14px;
+    }
+
+    /* Selected list: roomier touch targets */
+    .selected-item {
+        padding: 12px 14px;
+    }
+
+    .selected-item-name {
+        font-size: 14px;
+    }
+
+    .selected-item-remove {
+        width: 38px;
+        height: 38px;
+    }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   MOBILE SCHEDULE TABS DROPDOWN — chips collapse into one trigger
+   + glass menu so the table header stays a single compact row
+   ───────────────────────────────────────────────────────────── */
+@media (max-width: 1023px) {
+    .schedule-tabs.schedule-tabs-dropdown {
+        flex: 1 1 auto;
+        order: -1;
+        position: relative;
+    }
+
+    /* The dropdown trigger shares one row with title + fit button */
+    .schedule-container .schedule-header {
+        flex-wrap: nowrap;
+        gap: var(--space-2);
+        padding: 10px 12px;
+    }
+
+
+    .schedule-container .fit-table-btn {
+        order: 0;
+        margin-inline-start: auto;
+        padding: 7px 10px;
+    }
+
+    .schedule-container .units-flag {
+        flex: 1 1 100%;
+        order: 3;
+        justify-content: center;
+        padding: 6px 10px;
+        font-size: 11.5px;
+    }
+
+    .schedule-tabs-trigger {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        max-width: 100%;
+        padding: 9px 12px;
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-primary);
+        background-color: var(--tint);
+        border: 1px solid var(--border-primary);
+        border-radius: var(--radius-md);
+        cursor: pointer;
+        transition: background-color var(--interactive-dur) var(--ease-interactive),
+                    border-color var(--interactive-dur) var(--ease-interactive);
+    }
+
+    .schedule-tabs-trigger:active {
+        transform: scale(0.985);
+    }
+
+    .schedule-tabs-trigger .schedule-tab-name {
+        max-width: 46vw;
+        text-align: right;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .schedule-tabs-trigger .tabs-chevron {
+        width: 15px;
+        height: 15px;
+        flex-shrink: 0;
+        color: var(--text-secondary);
+        transition: transform var(--interactive-dur) var(--ease-interactive);
+    }
+
+    .schedule-tabs-trigger.open .tabs-chevron {
+        transform: rotate(180deg);
+    }
+
+    .schedule-tabs-trigger .schedule-tab-count {
+        background-color: var(--tint-strong, rgba(255, 255, 255, 0.08));
+    }
+
+    .schedule-tabs-menu {
+        position: absolute;
+        top: calc(100% + 6px);
+        right: 0;
+        width: max(240px, 100%);
+        z-index: 60;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding: 6px;
+        background-color: var(--glass-header, rgba(20, 20, 20, 0.9));
+        -webkit-backdrop-filter: blur(16px) saturate(1.4);
+        backdrop-filter: blur(16px) saturate(1.4);
+        border: 1px solid var(--border-secondary);
+        border-radius: var(--radius-md);
+        box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55);
+        opacity: 0;
+        transform: translateY(-6px) scale(0.99);
+        transform-origin: top center;
+        transition: opacity 160ms cubic-bezier(0.32, 0.72, 0, 1),
+                    transform 160ms cubic-bezier(0.32, 0.72, 0, 1);
+        pointer-events: none;
+    }
+
+    .schedule-tabs-menu.open {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        pointer-events: auto;
+    }
+
+    .schedule-tabs-option {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 44px;
+        padding: 8px 10px;
+        font-family: inherit;
+        font-size: 13.5px;
+        font-weight: 500;
+        color: var(--text-secondary);
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        text-align: right;
+        transition: background-color 120ms ease, color 120ms ease;
+    }
+
+    .schedule-tabs-option:active {
+        background-color: var(--tint);
+    }
+
+    .schedule-tabs-option.active {
+        color: var(--text-primary);
+        background-color: var(--tint);
+        border-color: var(--border-secondary);
+    }
+
+    .schedule-tabs-option .schedule-tab-name {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .schedule-tabs-row-actions {
+        display: flex;
+        gap: 4px;
+        flex-shrink: 0;
+    }
+
+    .schedule-tabs-add-row {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        min-height: 44px;
+        margin-top: 2px;
+        padding: 8px 10px;
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        background: transparent;
+        border: 1px dashed var(--border-secondary);
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+    }
+
+    .schedule-tabs-add-row:active {
+        color: var(--text-primary);
+        background-color: var(--tint);
+    }
+
+    .schedule-tabs-add-plus {
+        font-size: 16px;
+        font-weight: 700;
+    }
+
+    /* Count badge inside dropdown rows keeps its pill look */
+    .schedule-tabs-menu .schedule-tab-count {
+        flex-shrink: 0;
+    }
+}

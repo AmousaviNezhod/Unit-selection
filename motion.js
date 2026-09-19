@@ -80,6 +80,27 @@
         return true;
     };
 
+    /** Entrance for NEW schedule blocks (single or staggered list) */
+    Motion.blockIn = function (el) {
+        if (!can() || !el) return;
+        window.gsap.fromTo(el,
+            { scale: 0.88, y: 6, opacity: 0 },
+            { scale: 1, y: 0, opacity: 1, duration: 0.34, ease: 'back.out(1.7)', clearProps: 'transform,opacity' });
+    };
+
+    /** Reverse exit for REMOVED blocks: plays on clones appended to the
+     *  table wrapper (blocks themselves are destroyed by the rebuild). */
+    Motion.blockOut = function (clones) {
+        if (!can() || !clones || !clones.length) return;
+        window.gsap.to(clones, {
+            scale: 0.88, y: 6, opacity: 0,
+            duration: 0.2, ease: 'power2.in',
+            onComplete: function () {
+                clones.forEach(function (el) { el.remove(); });
+            }
+        });
+    };
+
     /** Quick crossfade for the schedule body on tab switch */
     Motion.tabSwap = function (body) {
         if (!can() || !body) return;

@@ -19,6 +19,7 @@
     <link rel="stylesheet" href="combo.css">
     <link rel="stylesheet" href="io.css">
     <link rel="stylesheet" href="validations.css">
+    <link rel="stylesheet" href="features.css">
 </head>
 <body class="dark-mode">
 
@@ -271,31 +272,28 @@
                     <span class="dock-label">برنامه‌ریزی AI</span>
                 </button>
                 <span class="dock-sep" role="separator"></span>
-                <button type="button" class="dock-btn" id="dockExportPDF" title="خروجی PDF">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
-                    <span class="dock-label">خروجی PDF</span>
-                </button>
-                <button type="button" class="dock-btn" id="dockCopyTable" title="کپی برنامه">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                    <span class="dock-label">کپی برنامه</span>
-                </button>
-                <button type="button" class="dock-btn" id="dockShareLink" title="اشتراک لینک">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
-                    <span class="dock-label">اشتراک لینک</span>
-                </button>
-                <button type="button" class="dock-btn" id="dockIo" title="خروجی (JSON)">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                    <span class="dock-label">خروجی JSON</span>
-                </button>
-                <button type="button" class="dock-btn" id="dockImport" title="ورود برنامه (JSON)">
+                <button type="button" class="dock-btn" id="dockExports" title="خروجی‌ها و اشتراک">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                    <span class="dock-label">ورود برنامه</span>
+                    <span class="dock-label">خروجی‌ها</span>
                 </button>
+                <span class="dock-sep" role="separator"></span>
                 <button type="button" class="dock-btn" id="dockCost" title="هزینه دروس">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
                     <span class="dock-label">هزینه دروس</span>
                 </button>
                 <span class="dock-sep" role="separator"></span>
+                <button type="button" class="dock-btn" id="dockCompare" title="مقایسه برنامه‌ها">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3H5a2 2 0 0 0-2 2v4"></path><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><rect x="2" y="2" width="7" height="7" rx="1" ry="1"></rect></svg>
+                    <span class="dock-label">مقایسه برنامه‌ها</span>
+                </button>
+                <button type="button" class="dock-btn" id="dockOverlay" title="مقایسه روی جدول">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><rect x="7" y="12" width="10" height="6" rx="1" ry="1" stroke-dasharray="2 2"></rect></svg>
+                    <span class="dock-label">مقایسه روی جدول</span>
+                </button>
+                <button type="button" class="dock-btn" id="dockSync" title="هم‌زمانی با دوستان">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                    <span class="dock-label">هم‌زمانی با دوستان</span>
+                </button>
                 <button type="button" class="dock-btn" id="dockCustomData" title="دیتای دلخواه">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
                     <span class="dock-label">دیتای دلخواه</span>
@@ -370,7 +368,6 @@
                 <div class="schedule-container" id="scheduleContainer">
                     <div class="schedule-header">
                         <div class="schedule-tabs" id="scheduleTabs"><!-- Filled by JS --></div>
-                        <h2 class="schedule-title">جدول زمان‌بندی</h2>
                         <button class="fit-close-btn" id="btnFitClose" type="button" aria-label="بازگشت از حالت تمام‌صفحه">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -385,6 +382,14 @@
                                 <line x1="12" y1="17" x2="12.01" y2="17"></line>
                             </svg>
                             <span id="unitsFlagText">جمع واحدها از ۲۰ واحد مجاز بیشتر شده است!</span>
+                        </div>
+                        <div class="overlay-legend" id="overlayLegend" hidden>
+                            <span class="overlay-legend-swatch" aria-hidden="true"></span>
+                            <span class="overlay-legend-text">مقایسه با: <strong id="overlayLegendName"></strong></span>
+                            <button type="button" class="overlay-legend-exit" id="btnOverlayExit" title="پایان مقایسه">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                پایان مقایسه
+                            </button>
                         </div>
                         <button class="fit-table-btn" id="btnFitTable" title="نمایش کل جدول در صفحه" aria-pressed="false">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -457,30 +462,6 @@
                 </svg>
                 <span>لیست دروس</span>
             </button>
-            <button type="button" class="bar-btn" id="btnExportPDFM">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                    <polyline points="14 2 14 8 20 8"></polyline>
-                    <line x1="16" y1="13" x2="8" y2="13"></line>
-                    <line x1="16" y1="17" x2="8" y2="17"></line>
-                </svg>
-                <span>خروجی PDF</span>
-            </button>
-            <button type="button" class="bar-btn" id="btnCopyTableM">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                </svg>
-                <span>کپی برنامه</span>
-            </button>
-            <button type="button" class="bar-btn" id="btnIoM">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                    <polyline points="7 10 12 15 17 10"></polyline>
-                    <line x1="12" y1="15" x2="12" y2="3"></line>
-                </svg>
-                <span>ورود/خروجی</span>
-            </button>
             <button type="button" class="bar-btn" id="btnValidationsM">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
@@ -494,6 +475,18 @@
                     <line x1="12" y1="3" x2="12" y2="15"></line>
                 </svg>
                 <span>دیتای دلخواه</span>
+            </button>
+            <button type="button" class="bar-btn" id="btnCompareM">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3H5a2 2 0 0 0-2 2v4"></path><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><rect x="2" y="2" width="7" height="7" rx="1" ry="1"></rect></svg>
+                <span>مقایسه برنامه‌ها</span>
+            </button>
+            <button type="button" class="bar-btn" id="btnOverlayM">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><rect x="7" y="12" width="10" height="6" rx="1" ry="1" stroke-dasharray="2 2"></rect></svg>
+                <span>مقایسه روی جدول</span>
+            </button>
+            <button type="button" class="bar-btn" id="btnSyncM">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                <span>هم‌زمانی با دوستان</span>
             </button>
                 </div><!-- /dock-sheet-grid -->
             </div><!-- /dock-sheet -->
@@ -958,8 +951,8 @@
             </div>
 
             <div class="modal-tabs" role="tablist">
-                <button class="modal-tab active" id="tabIoExport" role="tab" aria-selected="true" aria-controls="paneIoExport">خروجی برنامه</button>
-                <button class="modal-tab" id="tabIoImport" role="tab" aria-selected="false" aria-controls="paneIoImport">ورود برنامه</button>
+                <button class="modal-tab active" id="tabIoExport" role="tab" aria-selected="true" aria-controls="paneIoExport">خروجی</button>
+                <button class="modal-tab" id="tabIoImport" role="tab" aria-selected="false" aria-controls="paneIoImport">ورودی</button>
             </div>
 
             <!-- Tab 1: export -->
@@ -1092,6 +1085,141 @@
 
             <div class="modal-footer">
                 <button class="btn-secondary" id="btnCloseAiPlanFooter">بستن</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Compare Modal (مقایسه برنامه‌ها) -->
+    <div class="modal-overlay" id="compareModal">
+        <div class="modal-content modal-large compare-modal">
+            <div class="modal-header">
+                <h3 class="modal-title">مقایسه برنامه‌ها</h3>
+                <button class="modal-close" id="closeCompareModal" aria-label="بستن">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div id="compareGrid"><!-- Filled by JS --></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="btnCompareToOverlay">روی جدول ببین</button>
+                <button class="btn-secondary" id="btnCloseCompareModal">بستن</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Friend Time-Sync Modal (هم‌زمانی با دوستان) -->
+    <div class="modal-overlay" id="syncModal">
+        <div class="modal-content modal-large sync-modal">
+            <div class="modal-header">
+                <h3 class="modal-title">هم‌زمانی با دوستان</h3>
+                <button class="modal-close" id="closeSyncModal" aria-label="بستن">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p class="sync-intro">
+                    لینک شیر برنامه‌ی دوستت را اینجا بگذار تا دروس مشترک و
+                    <strong>وقت‌های آزاد مشترک</strong> هر دو نفر پیدا شود — همه‌چیز داخل مرورگر محاسبه می‌شود.
+                </p>
+                <div class="sync-input-row">
+                    <input type="text" id="syncInput" class="sync-input" placeholder="https://...#eyJjIjp..." dir="ltr" autocomplete="off" spellcheck="false">
+                    <button class="btn-primary" id="btnRunSync">مقایسه کن</button>
+                </div>
+                <button type="button" class="btn-secondary sync-to-overlay-btn" id="btnSyncToOverlay">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><rect x="7" y="12" width="10" height="6" rx="1" ry="1" stroke-dasharray="2 2"></rect></svg>
+                    برنامه‌ی دوست را روی جدول بگذار
+                </button>
+                <div id="syncResult" hidden><!-- Filled by JS --></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="btnCloseSyncModal">بستن</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Overlay Picker Modal (انتخاب برنامه برای مقایسه روی جدول) -->
+    <div class="modal-overlay" id="overlayModal">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h3 class="modal-title">مقایسه روی جدول</h3>
+                <button class="modal-close" id="closeOverlayModal" aria-label="بستن">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p class="overlay-intro">کدام برنامه را به‌صورت لایه‌ی دوم زیر برنامه‌ی فعلی بگذاریم؟</p>
+                <div id="overlayPickerList" class="overlay-picker-list"><!-- Filled by JS --></div>
+                <button type="button" class="overlay-friend-row" id="btnOverlayFriend">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                    از لینک شیر دوست...
+                </button>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="btnCloseOverlayModal">بستن</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Exports Modal (همه‌ی خروجی‌ها یک‌جا) -->
+    <div class="modal-overlay" id="exportsModal">
+        <div class="modal-content modal-large exports-modal">
+            <div class="modal-header">
+                <h3 class="modal-title">خروجی‌ها و اشتراک</h3>
+                <button class="modal-close" id="closeExportsModal" aria-label="بستن">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="exports-grid">
+                    <button type="button" class="export-card" id="expPdf">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+                        <span class="export-card-title">خروجی PDF</span>
+                        <span class="export-card-desc">عکس جدول برای چاپ و آرشیو</span>
+                    </button>
+                    <button type="button" class="export-card" id="expIcs">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line><path d="M9 16l2 2 4-4"></path></svg>
+                        <span class="export-card-title">تقویم (ICS)</span>
+                        <span class="export-card-desc">برای Google Calendar و تقویم گوشی</span>
+                    </button>
+                    <button type="button" class="export-card" id="expCopy">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                        <span class="export-card-title">کپی برنامه</span>
+                        <span class="export-card-desc">متن برنامه برای ارسال در چت</span>
+                    </button>
+                    <button type="button" class="export-card" id="expShare">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+                        <span class="export-card-title">لینک اشتراک</span>
+                        <span class="export-card-desc">کپی لینک برنامه‌ی فعلی</span>
+                    </button>
+                    <button type="button" class="export-card" id="expJson">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                        <span class="export-card-title">خروجی JSON</span>
+                        <span class="export-card-desc">کپی یا دانلود فایل — برای AI هم خوب است</span>
+                    </button>
+                    <button type="button" class="export-card" id="expPortal">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+                        <span class="export-card-title">تیک خودکار پورتال</span>
+                        <span class="export-card-desc">اسکریپت کنسول برای سایت دانشگاه</span>
+                    </button>
+                    <button type="button" class="export-card" id="expImport">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                        <span class="export-card-title">ورود برنامه</span>
+                        <span class="export-card-desc">paste کردن JSON یا فایل ذخیره‌شده</span>
+                    </button>
+                </div>
             </div>
         </div>
     </div>

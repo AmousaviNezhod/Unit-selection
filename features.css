@@ -1,0 +1,621 @@
+/* ─────────────────────────────────────────────────────────────
+   COMPARE MODAL — schedule comparison table + shared chips
+   ───────────────────────────────────────────────────────────── */
+.compare-table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-md);
+}
+
+.compare-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    min-width: 420px;
+}
+
+.compare-table th,
+.compare-table td {
+    padding: 10px 14px;
+    text-align: center;
+    border-bottom: 1px solid var(--border-primary);
+}
+
+.compare-table thead th {
+    background-color: var(--bg-tertiary);
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.compare-table .compare-metric-head,
+.compare-table .compare-metric {
+    text-align: right;
+    color: var(--text-secondary);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.compare-active-tag {
+    display: inline-block;
+    margin-inline-start: 4px;
+    padding: 1px 8px;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--success-contrast, #052e12);
+    background-color: var(--success);
+    border-radius: 999px;
+    vertical-align: middle;
+}
+
+.compare-shared {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 14px;
+}
+
+.compare-shared-label {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.compare-shared-chip {
+    padding: 3px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-primary);
+    background-color: var(--tint);
+    border: 1px solid var(--border-secondary);
+    border-radius: 999px;
+}
+
+.compare-note {
+    margin-top: 12px;
+    font-size: 11.5px;
+    color: var(--text-muted, #888);
+}
+
+/* Mobile: metric labels sit as a slim first column, values wrap freely */
+@media (max-width: 1023px) {
+    .compare-table {
+        min-width: 0;
+        font-size: 12.5px;
+    }
+
+    .compare-table th,
+    .compare-table td {
+        padding: 9px 10px;
+    }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   FRIEND SYNC MODAL — stats, chips, common free slots
+   ───────────────────────────────────────────────────────────── */
+.sync-intro {
+    margin: 0 0 14px;
+    font-size: 13px;
+    line-height: 1.9;
+    color: var(--text-secondary);
+}
+
+.sync-input-row {
+    display: flex;
+    gap: 8px;
+}
+
+.sync-input {
+    flex: 1;
+    min-width: 0;
+    padding: 10px 14px;
+    font-size: 12.5px;
+    color: var(--text-primary);
+    background-color: var(--bg-primary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    direction: ltr;
+    text-align: left;
+}
+
+.sync-input:focus {
+    outline: none;
+    border-color: var(--text-primary);
+}
+
+.sync-input-row .btn-primary {
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.sync-section {
+    margin-top: 18px;
+}
+
+.sync-section:first-child {
+    margin-top: 4px;
+}
+
+.sync-section-title {
+    margin: 0 0 10px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.sync-stat-row {
+    display: flex;
+    gap: 8px;
+}
+
+.sync-stat {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 14px 8px;
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-md);
+}
+
+.sync-stat.shared {
+    border-color: var(--success);
+    box-shadow: 0 0 0 1px var(--success) inset;
+}
+
+.sync-stat-value {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--text-primary);
+}
+
+.sync-stat.shared .sync-stat-value {
+    color: var(--success);
+}
+
+.sync-stat-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.sync-warn {
+    margin-top: 10px;
+    padding: 8px 12px;
+    font-size: 12px;
+    color: var(--warning);
+    background: var(--tint);
+    border: 1px dashed var(--warning);
+    border-radius: var(--radius-sm);
+}
+
+.sync-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.sync-chip {
+    padding: 4px 11px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-primary);
+    border-radius: 999px;
+}
+
+.sync-chip.shared {
+    color: var(--success-contrast, #052e12);
+    background-color: var(--success);
+    border-color: var(--success);
+    font-weight: 600;
+}
+
+.sync-chip.more {
+    color: var(--text-muted, #888);
+    border-style: dashed;
+}
+
+.sync-empty {
+    padding: 12px;
+    font-size: 12.5px;
+    color: var(--text-muted, #888);
+    background-color: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+}
+
+.sync-free-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.sync-free-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 12px;
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-sm);
+}
+
+.sync-free-day {
+    min-width: 64px;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.sync-free-ranges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.sync-free-range {
+    padding: 2px 9px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--text-primary);
+    background-color: var(--tint);
+    border: 1px solid var(--border-secondary);
+    border-radius: 999px;
+    font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 1023px) {
+    .sync-input-row {
+        flex-direction: column;
+    }
+
+    .sync-input-row .btn-primary {
+        width: 100%;
+        padding: 12px;
+    }
+
+    .sync-stat-value {
+        font-size: 18px;
+    }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   TABLE COMPARISON OVERLAY — second schedule as ghost blocks on
+   each day's second sub-line (dashed, reduced opacity)
+   ───────────────────────────────────────────────────────────── */
+
+/* Day cells become TWO FULL-SIZE stacked lanes in overlay mode.
+   Normal block visual height = cell − 2×3px insets (66px mobile / 72px
+   desktop) — overlay lanes are EXACTLY that tall, so blocks never shrink.
+   Cell = 3 + lane + 6(gap) + lane + 3. */
+.compare-overlay-mode .day-row td {
+    height: 144px; /* 3 + 66 + 6 + 66 + 3 */
+}
+
+/* Lane 1 (top) = my schedule: identical geometry to normal blocks */
+.compare-overlay-mode .course-block:not(.course-block-overlay) {
+    top: 3px !important;
+    bottom: 75px !important; /* lane height = 144 − 3 − 75 = 66px */
+}
+
+/* Lane 2 (bottom) = comparison schedule: SAME size, distinguished by the
+   purple tint, dashed border and slightly reduced opacity only */
+.course-block-overlay {
+    top: 75px !important;
+    bottom: 3px !important;
+    height: auto !important;
+    opacity: 0.72;
+    border: 1.5px dashed rgba(255, 255, 255, 0.65) !important;
+    border-radius: var(--radius-sm) !important;
+    box-shadow: none !important;
+    z-index: 5 !important;
+    cursor: pointer;
+}
+
+.course-block-overlay:hover {
+    opacity: 0.9;
+    transform: none !important;
+}
+
+/* Light theme: white dashed border is invisible on light cells */
+.light-mode .course-block-overlay {
+    border-color: rgba(0, 0, 0, 0.4) !important;
+}
+
+/* Desktop cells are 78px tall → lanes stay 72px = normal desktop block */
+@media (min-width: 1024px) {
+    .compare-overlay-mode .day-row td {
+        height: 156px; /* 3 + 72 + 6 + 72 + 3 */
+    }
+
+    .compare-overlay-mode .course-block:not(.course-block-overlay) {
+        bottom: 81px !important;
+    }
+
+    .course-block-overlay {
+        top: 81px !important;
+    }
+}
+
+/* Legend banner between schedule header and table */
+.overlay-legend[hidden] {
+    display: none !important;
+}
+
+.overlay-legend {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0;
+    padding: 7px 14px;
+    /* no color-mix(): this banner lives inside the PDF-clone tree and
+       html2canvas 1.4.1 cannot parse modern color functions */
+    background: #1f1c2e; /* #8b7cf6 @12% over #141414 */
+    border-bottom: 1px solid var(--border-primary);
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    animation: overlayLegendIn 240ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@keyframes overlayLegendIn {
+    from { opacity: 0; transform: translateY(-6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.overlay-legend-swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+    background-color: var(--overlay-color, #8b7cf6);
+    border: 1.5px dashed rgba(255, 255, 255, 0.65);
+    flex-shrink: 0;
+}
+
+.overlay-legend-text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.overlay-legend-text strong {
+    color: var(--text-primary);
+}
+
+.overlay-legend-exit {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    font-family: inherit;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: var(--tint);
+    border: 1px solid var(--border-secondary);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: color var(--interactive-dur) var(--ease-interactive),
+                background-color var(--interactive-dur) var(--ease-interactive);
+}
+
+.overlay-legend-exit svg {
+    width: 12px;
+    height: 12px;
+}
+
+.overlay-legend-exit:hover {
+    color: var(--danger-contrast, #fff);
+    background-color: var(--danger);
+}
+
+/* Picker modal rows */
+.overlay-intro {
+    margin: 0 0 12px;
+    font-size: 13px;
+    line-height: 1.9;
+    color: var(--text-secondary);
+}
+
+.overlay-picker-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.overlay-picker-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 46px;
+    padding: 10px 12px;
+    font-family: inherit;
+    font-size: 13.5px;
+    color: var(--text-primary);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    text-align: right;
+    transition: border-color var(--interactive-dur) var(--ease-interactive),
+                background-color var(--interactive-dur) var(--ease-interactive);
+}
+
+.overlay-picker-row:hover:not(:disabled) {
+    border-color: var(--border-focus);
+}
+
+.overlay-picker-row:disabled {
+    cursor: default;
+    opacity: 0.55;
+}
+
+.overlay-picker-row.active {
+    border-color: #8b7cf6;
+    background: #221f33; /* #8b7cf6 @14% over #1e1e1e */
+}
+
+.overlay-picker-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.overlay-current-tag,
+.overlay-on-tag {
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.overlay-on-tag {
+    color: #a99cf8;
+}
+
+.overlay-friend-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    margin-top: 10px;
+    min-height: 46px;
+    padding: 10px 12px;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: transparent;
+    border: 1px dashed var(--border-secondary);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: color var(--interactive-dur) var(--ease-interactive),
+                border-color var(--interactive-dur) var(--ease-interactive);
+}
+
+.overlay-friend-row svg {
+    width: 16px;
+    height: 16px;
+}
+
+.overlay-friend-row:hover {
+    color: var(--text-primary);
+    border-color: var(--border-focus);
+}
+
+/* Sync modal → overlay button */
+.sync-to-overlay-btn {
+    width: 100%;
+    margin-top: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.sync-to-overlay-btn svg {
+    width: 15px;
+    height: 15px;
+}
+
+/* Reduced motion: legend appears instantly */
+@media (prefers-reduced-motion: reduce) {
+    .overlay-legend {
+        animation: none;
+    }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   EXPORTS HUB MODAL — card grid for every way out of the app
+   ───────────────────────────────────────────────────────────── */
+.exports-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 10px;
+}
+
+.export-card {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 16px;
+    font-family: inherit;
+    text-align: right;
+    color: var(--text-primary);
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: transform var(--interactive-dur) var(--ease-interactive),
+                border-color var(--interactive-dur) var(--ease-interactive),
+                background-color var(--interactive-dur) var(--ease-interactive);
+}
+
+.export-card:hover {
+    border-color: var(--border-focus);
+    background-color: var(--tint);
+    transform: translateY(-2px);
+}
+
+.export-card:active {
+    transform: scale(0.98);
+}
+
+.export-card svg {
+    width: 22px;
+    height: 22px;
+    color: var(--text-secondary);
+    transition: color var(--interactive-dur) var(--ease-interactive);
+}
+
+.export-card:hover svg {
+    color: var(--text-primary);
+}
+
+.export-card-title {
+    font-size: 13.5px;
+    font-weight: 700;
+}
+
+.export-card-desc {
+    font-size: 11.5px;
+    line-height: 1.7;
+    color: var(--text-secondary);
+}
+
+@media (max-width: 1023px) {
+    .exports-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+    }
+
+    .export-card {
+        padding: 14px 12px;
+        gap: 5px;
+    }
+
+    .export-card svg {
+        width: 20px;
+        height: 20px;
+    }
+
+    .export-card-title {
+        font-size: 13px;
+    }
+
+    .export-card-desc {
+        font-size: 10.5px;
+    }
+}
+
+@media (max-width: 360px) {
+    .exports-grid {
+        grid-template-columns: 1fr;
+    }
+}
