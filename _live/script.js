@@ -286,6 +286,7 @@ const elements = {
     lastUpdateValue: document.getElementById('lastUpdateValue'),
 
     // Custom-data active banner
+    customDataBanner: document.getElementById('customDataBanner'),
 
     // Mobile search
     searchSection: document.getElementById('searchSection'),
@@ -331,6 +332,7 @@ const elements = {
     btnShareLink: document.getElementById('btnShareLink'),
     btnReset: document.getElementById('btnReset'),
     btnFitTable: document.getElementById('btnFitTable'),
+    btnBannerRestoreDefault: document.getElementById('btnBannerRestoreDefault'),
     btnIo: document.getElementById('btnIo'),
     btnUndo: document.getElementById('btnUndo'),
     btnRedo: document.getElementById('btnRedo'),
@@ -395,28 +397,8 @@ const elements = {
 
     // Mobile search modal
     searchTrigger: document.getElementById('searchTrigger'),
-    scheduleSection: document.querySelector('.schedule-section'),
-    summaryControls: document.querySelector('.summary-controls'),
-    // Mobile courses page + header view dock + filter sheet + custom-data info
-    coursesPage: document.getElementById('coursesPage'),
-    viewDock: document.getElementById('viewDock'),
-    viewDockIndicator: document.getElementById('viewDockIndicator'),
-    viewBtnSchedule: document.getElementById('viewBtnSchedule'),
-    viewBtnCourses: document.getElementById('viewBtnCourses'),
-    viewDockBadge: document.getElementById('viewDockBadge'),
-    btnOpenFilters: document.getElementById('btnOpenFilters'),
-    filtersModal: document.getElementById('filtersModal'),
-    closeFiltersModal: document.getElementById('closeFiltersModal'),
-    filtersModalBody: document.getElementById('filtersModalBody'),
-    filterBarSheet: document.getElementById('filterBarSheet'),
-    btnFiltersApply: document.getElementById('btnFiltersApply'),
-    btnFiltersClear: document.getElementById('btnFiltersClear'),
-    customDataFlag: document.getElementById('customDataFlag'),
-    customDataInfoModal: document.getElementById('customDataInfoModal'),
-    closeCustomDataInfo: document.getElementById('closeCustomDataInfo'),
-    cdiDesc: document.getElementById('cdiDesc'),
-    btnCdiClose: document.getElementById('btnCdiClose'),
-    btnCdiRestoreDefault: document.getElementById('btnCdiRestoreDefault'),
+    searchModal: document.getElementById('searchModal'),
+    searchModalClose: document.getElementById('searchModalClose'),
 
     // Desktop filter drawer
     panelFilterToggle: document.getElementById('panelFilterToggle'),
@@ -1310,22 +1292,6 @@ function syncFilterBar(bar) {
 function syncFilterBars() {
     syncFilterBar(elements.filterBarMobile);
     syncFilterBar(elements.filterDrawerBar);
-    syncFilterBar(elements.filterBarSheet);
-
-    // Filters button badge (courses page header)
-    if (elements.btnOpenFilters) {
-        const btnBadge = elements.btnOpenFilters.querySelector('[data-role="badge"]');
-        const n = countActiveFilters();
-        if (btnBadge) {
-            btnBadge.textContent = toPersianNumber(n);
-            btnBadge.classList.toggle('hidden', n === 0);
-        }
-    }
-    // Header dock badge: selected course count on the courses tab
-    if (elements.viewDockBadge) {
-        elements.viewDockBadge.textContent = toPersianNumber(state.selectedCourses.length);
-        elements.viewDockBadge.classList.toggle('hidden', state.selectedCourses.length === 0);
-    }
 
     // Header badge on the panel filter button
     if (elements.panelFilterBadge) {
@@ -1361,10 +1327,8 @@ function buildFilterDrawerHtml() {
 function rebuildFilterBars() {
     elements.filterBarMobile.innerHTML = buildFilterBarHtml();
     elements.filterDrawerBar.innerHTML = buildFilterDrawerHtml();
-    elements.filterBarSheet.innerHTML = buildFilterBarHtml();
     bindFilterBar(elements.filterBarMobile);
     bindFilterBar(elements.filterDrawerBar);
-    bindFilterBar(elements.filterBarSheet);
     syncFilterBars();
 }
 
@@ -1383,16 +1347,6 @@ function isFilterDrawerOpen() {
 const debouncedGroupRefresh = debounceFn(() => refreshLists(), 160);
 
 /** Wire events on a filter bar container (called once per bar) */
-/** Reset every filter to defaults (shared by bar chips + sheet button) */
-function clearAllFilters() {
-    state.filters = {
-        days: new Set(), startHour: null, endHour: null,
-        exactHour: null, professor: '', units: null,
-        group: '', hasTime: false, onlyAvailable: false, onlyFull: false,
-        timeMode: 'range', sortAsc: null
-    };
-}
-
 function bindFilterBar(bar) {
     if (!bar) return;
 
@@ -1408,7 +1362,12 @@ function bindFilterBar(bar) {
         }
 
         if (kind === 'clear') {
-            clearAllFilters();
+            state.filters = {
+                days: new Set(), startHour: null, endHour: null,
+                exactHour: null, professor: '', units: null,
+                group: '', hasTime: false, onlyAvailable: false, onlyFull: false,
+                timeMode: 'range', sortAsc: null
+            };
             syncFilterBars();
             refreshLists();
             return;
@@ -2532,29 +2491,11 @@ function bindCardButtons(container) {
         if (swapBtn) {
             e.stopPropagation();
             swapCourseGroup(swapBtn.dataset.swapFrom, swapBtn.dataset.swapTo);
-            return;
-        }
-        // Card body click (no button hit): open the course info modal —
-        // same interaction as the schedule chips and table blocks.
-        const card = e.target.closest('.course-result[data-course-id]');
-        if (card && !card.classList.contains('disabled')) {
-            const course = findCourseById(card.dataset.courseId);
-            if (course) showCourseModal(course);
         }
     });
 }
 
-/* Mobile courses page renders in windows: 60 cards at a time (append on
-   demand). 1300+ DOM nodes per keystroke was the main lag source. */
-const SEARCH_WINDOW = 60;
-let searchRenderedCount = 0;
-let searchSourceList = [];
-let searchSentinel = null;
-
 function renderSearchResults(courses, isInitial) {
-    searchSourceList = courses;
-    searchRenderedCount = 0;
-
     if (!courses.length) {
         elements.resultsCount.textContent = 'نتیجه‌ای یافت نشد';
         elements.resultsList.innerHTML = `
@@ -2572,176 +2513,32 @@ function renderSearchResults(courses, isInitial) {
         ? `${toPersianNumber(courses.length)} درس ارائه‌شده`
         : `${toPersianNumber(courses.length)} نتیجه${hasActiveFilters() ? ' (فیلتر شده)' : ''}`;
 
-    elements.resultsList.innerHTML = '';
-    appendSearchWindow();
-}
-
-function appendSearchWindow() {
-    if (searchRenderedCount >= searchSourceList.length) return;
-    const slice = searchSourceList.slice(searchRenderedCount, searchRenderedCount + SEARCH_WINDOW);
-    const frag = document.createDocumentFragment();
-    const tmp = document.createElement('div');
-    tmp.innerHTML = slice.map(courseCardHtml).join('');
-    while (tmp.firstChild) {
-        const card = tmp.firstChild;
-        frag.appendChild(card);
-        if (state.selectedCourses.includes(card.dataset && card.dataset.courseId)) card.classList.add('selected-card');
-    }
-    elements.resultsList.appendChild(frag);
-    searchRenderedCount += slice.length;
-    bindCardButtons(elements.resultsList); // idempotent: re-arms delegation after innerHTML resets
-
-    // Loading sentinel: one element at the end, replaced each append
-    if (searchRenderedCount < searchSourceList.length) {
-        if (!searchSentinel || !searchSentinel.isConnected) {
-            searchSentinel = document.createElement('div');
-            searchSentinel.className = 'results-sentinel';
-            searchSentinel.style.height = '1px';
-            elements.resultsList.appendChild(searchSentinel);
-        } else {
-            elements.resultsList.appendChild(searchSentinel);
-        }
-        observeSearchSentinel();
-    } else if (searchSentinel) {
-        searchSentinel.remove();
-        searchSentinel = null;
-    }
-}
-
-let searchObserver = null;
-function observeSearchSentinel() {
-    if (!searchObserver) {
-        searchObserver = new IntersectionObserver(entries => {
-            if (entries.some(en => en.isIntersecting)) appendSearchWindow();
-        }, { root: elements.resultsList, rootMargin: '400px' });
-    }
-    if (searchSentinel) searchObserver.observe(searchSentinel);
+    elements.resultsList.innerHTML = courses.map(courseCardHtml).join('');
+    bindCardButtons(elements.resultsList);
 }
 
 function showSearchResults(isInitial = false) {
     const { list, initial } = filterCourses(elements.searchInput.value);
     renderSearchResults(list, isInitial && initial);
+    elements.searchClear.classList.add('visible');
 }
 
-/* ── Mobile view switcher: schedule page vs courses page ── */
-let activeMobileView = 'schedule';
-
-function setMobileView(view) {
-    if (view !== 'schedule' && view !== 'courses') return;
-    if (!isMobileViewport()) view = 'schedule';
-    const changed = activeMobileView !== view;
-    activeMobileView = view;
-
-    const courses = view === 'courses';
-    const mobile = isMobileViewport();
-    syncMobileHeaderVar();
-
-    // Leaving the schedule page while fullscreen fit-mode is active would
-    // carry its body scroll-lock into the other tab - exit it properly first.
-    if (mobile && courses && elements.scheduleContainer.classList.contains('fit-mode')) {
-        elements.btnFitTable.click();
+/* Mobile search modal: open/close (results always visible inside) */
+function setSearchModalOpen(open) {
+    elements.searchModal.classList.toggle('active', open);
+    document.body.classList.toggle('modal-open', open);
+    if (open) {
+        showSearchResults(true);
+        setTimeout(() => elements.searchInput.focus(), 250);
+    } else {
+        elements.searchInput.value = '';
+        elements.searchClear.classList.remove('visible');
+        showSearchResults(true);
     }
-    // Safety net: a view switch must never leave the page scroll-locked
-    // (stuck modal-open class or leftover inline overflow).
-    if (mobile && !document.querySelector('.modal-overlay.active')) {
-        document.body.classList.remove('modal-open');
-        document.body.style.removeProperty('overflow');
-    }
-
-    // ── Directional push between the two pages (GSAP, motion.js) ──
-    // schedule → courses : schedule exits LEFT, courses enters from RIGHT.
-    // courses → schedule : the exact reverse.
-    // The outgoing page is pinned pixel-exact BEFORE any relayout, so the
-    // switch itself causes zero visual jump — only the two panels slide.
-    const outgoing = courses ? elements.scheduleSection : elements.coursesPage;
-    const incoming = courses ? elements.coursesPage : elements.scheduleSection;
-
-    // A fast double-switch must never leave a stale pinned overlay behind
-    if (window.Motion) Motion.viewPushCancel();
-
-    const showIncoming = () => {
-        incoming.classList.remove('view-hidden');
-        if (incoming === elements.coursesPage) incoming.hidden = false;
-        // Lets CSS lay the courses page out as a viewport-filling flex column
-        document.body.classList.toggle('view-courses', mobile && courses);
-    };
-    const hideOutgoing = () => {
-        outgoing.classList.add('view-hidden');
-        if (outgoing === elements.coursesPage) outgoing.hidden = true;
-    };
-
-    const pushed = changed && mobile && window.Motion && Motion.viewPush({
-        outgoing: outgoing,
-        incoming: incoming,
-        dir: courses ? 'fwd' : 'back',
-        midway: showIncoming,   // relayout happens while the screen is frozen
-        onDone: hideOutgoing
-    });
-
-    if (!pushed) {
-        // Fallback (reduced motion / no GSAP / first paint): instant swap
-        showIncoming();
-        hideOutgoing();
-    }
-
-    // Desktop-only chrome: both mobile pages have their own search/filter UI
-    elements.searchSection.classList.toggle('view-hidden', mobile);
-    elements.summaryControls.classList.toggle('view-hidden', mobile);
-
-    elements.viewBtnSchedule.classList.toggle('active', !courses);
-    elements.viewBtnSchedule.setAttribute('aria-pressed', String(!courses));
-    elements.viewBtnCourses.classList.toggle('active', courses);
-    elements.viewBtnCourses.setAttribute('aria-pressed', String(courses));
-
-    placeStatsBar();
-    placeDockIndicator(!pushed); // pill slides with the push, jumps on fallback
-
-    if (changed) {
-        window.scrollTo({ top: 0, behavior: 'instant' });
-        if (courses) {
-            showSearchResults(true);
-            const list = document.getElementById('resultsList');
-            if (list) list.scrollTop = 0;
-        }
-    }
-}
-
-/** Slide the dock's selection pill under the active tab (GSAP-tweened by
- *  motion.js; instant on first paint, resize and desktop). */
-function placeDockIndicator(instant) {
-    const dock = elements.viewDock;
-    const ind = elements.viewDockIndicator;
-    if (!dock || !ind || !dock.offsetWidth) return;
-    const btn = activeMobileView === 'courses' ? elements.viewBtnCourses : elements.viewBtnSchedule;
-    if (!btn || !btn.offsetWidth) return;
-    if (window.Motion) {
-        Motion.dockPill(ind, btn.offsetLeft, btn.offsetWidth, instant);
-        return;
-    }
-    ind.style.transform = `translateX(${btn.offsetLeft}px)`;
-    ind.style.width = `${btn.offsetWidth}px`;
 }
 
 function isSearchModalOpen() {
-    // Legacy name kept for callers: on mobile the "search surface" is the
-    // courses PAGE now (or the filters sheet while it is open)
-    return activeMobileView === 'courses' || elements.filtersModal.classList.contains('active');
-}
-
-/* Mobile filters bottom-sheet: open/close */
-function setFiltersModalOpen(open) {
-    elements.filtersModal.classList.toggle('active', open);
-    document.body.classList.toggle('modal-open', open);
-    if (open) syncFilterBars();
-}
-
-/* Mobile custom-data info sheet */
-function setCustomDataInfoOpen(open) {
-    elements.customDataInfoModal.classList.toggle('active', open);
-    document.body.classList.toggle('modal-open', open);
-    if (open) {
-        elements.cdiDesc.hidden = !state.customActive;
-    }
+    return elements.searchModal.classList.contains('active');
 }
 
 /** Desktop panel list */
@@ -2807,39 +2604,10 @@ function patchCardSelectionState(courseId) {
     return patched > 0;
 }
 
-/** Keep --m-header-h in sync with the real mobile header height (the dock,
-    warning banners etc. change it), so the courses page height follows. */
-function syncMobileHeaderVar() {
-    const header = document.querySelector('.app-header');
-    if (header) {
-        document.documentElement.style.setProperty('--m-header-h', header.offsetHeight + 'px');
-    }
-}
-
-/** Stats bar placement: inside the schedule section (mobile pages) vs
-    header (desktop). Runs on view switch + breakpoint crossings. */
-function placeStatsBar() {
-    const stats = document.getElementById('headerStats');
-    const section = document.querySelector('.schedule-section');
-    if (!stats || !section) return;
-    if (isMobileViewport() && stats.parentElement !== section) {
-        section.insertBefore(stats, section.firstChild);
-    } else if (!isMobileViewport()) {
-        const headerContent = document.querySelector('.header-content');
-        const headerActions = document.querySelector('.header-actions');
-        if (headerContent && stats.parentElement !== headerContent) {
-            headerContent.insertBefore(stats, headerActions);
-        }
-    }
-}
-
 /** Refresh every course list view */
 function refreshLists() {
     renderPanelList();
-    if (isMobileViewport()) {
-        const { list, initial } = filterCourses(elements.searchInput.value);
-        renderSearchResults(list, initial && !elements.searchInput.value.trim());
-    } else if (isSearchModalOpen()) {
+    if (isSearchModalOpen() || elements.searchResults.classList.contains('active')) {
         const { list, initial } = filterCourses(elements.searchInput.value);
         renderSearchResults(list, initial && !elements.searchInput.value.trim());
     }
@@ -2993,8 +2761,10 @@ function removeCourse(courseId) {
     // Removed course leaves a ghost trail on its old cells
     if (course) ghostTrail(slotsOfCourses([courseId]), []);
 
-    // The courses PAGE is persistent on mobile — just close other modals
+    // Keep the search modal open; close other modals (course info etc.)
+    const searchWasOpen = isSearchModalOpen();
     closeAllModals();
+    if (searchWasOpen) setSearchModalOpen(true);
 
     if (course) showToast(`درس "${course.name}" حذف شد`, 'info');
 }
@@ -3788,40 +3558,31 @@ function runFriendSync() {
     myCourses.forEach(c => addBusy(busy.mine, c));
     friendCourses.forEach(c => addBusy(busy.friend, c));
 
-    // Shared class times per day: overlaps between MY schedule and MY
-    // FRIEND's schedule (hours when both are in class — together or apart)
-    const sharedTimes = [];
+    // Common free gaps per day (≥ 60min inside the 7..20 open window)
+    const OPEN = 7, CLOSE = 20, MIN_GAP = 1;
+    const freeSlots = [];
     CONFIG.DAYS.forEach(day => {
-        const mine = (busy.mine[day] || []).slice().sort((a, b) => a[0] - b[0]);
-        const theirs = (busy.friend[day] || []).slice().sort((a, b) => a[0] - b[0]);
-        const overlaps = [];
-        mine.forEach(([ms, me]) => {
-            theirs.forEach(([fs, fe]) => {
-                const s = Math.max(ms, fs), e = Math.min(me, fe);
-                if (e - s > 0.01) overlaps.push([s, e]);
-            });
+        const merged = [...(busy.mine[day] || []), ...(busy.friend[day] || [])]
+            .sort((a, b) => a[0] - b[0]);
+        let cursor = OPEN;
+        const dayFree = [];
+        merged.forEach(([s, e]) => {
+            if (s - cursor >= MIN_GAP) dayFree.push([cursor, Math.min(s, CLOSE)]);
+            cursor = Math.max(cursor, e);
         });
-        if (overlaps.length) {
-            overlaps.sort((a, b) => a[0] - b[0]);
-            // merge touching/overlapping intervals so ranges stay clean
-            const merged = [overlaps[0]];
-            overlaps.slice(1).forEach(([s, e]) => {
-                const last = merged[merged.length - 1];
-                if (s <= last[1] + 0.01) last[1] = Math.max(last[1], e);
-                else merged.push([s, e]);
-            });
-            sharedTimes.push({
+        if (CLOSE - cursor >= MIN_GAP) dayFree.push([cursor, CLOSE]);
+        if (dayFree.length) {
+            freeSlots.push({
                 day,
-                ranges: merged.map(([a, b]) => `${minutesToTime(Math.round(a * 60))}–${minutesToTime(Math.round(b * 60))}`),
-                hours: merged.reduce((acc, [a, b]) => acc + (b - a), 0)
+                ranges: dayFree.map(([a, b]) => `${minutesToTime(Math.round(a * 60))}–${minutesToTime(Math.round(b * 60))}`)
             });
         }
     });
 
-    renderSyncResult(friendCourses, sharedCourses, sharedTimes, unknownCount);
+    renderSyncResult(friendCourses, sharedCourses, freeSlots, unknownCount);
 }
 
-function renderSyncResult(friendCourses, sharedCourses, sharedTimes, unknownCount) {
+function renderSyncResult(friendCourses, sharedCourses, freeSlots, unknownCount) {
     const box = elements.syncResult;
     const sharedNames = sharedCourses.map(c => c.name);
     const sharedSet = new Set(sharedCourses);
@@ -3832,7 +3593,7 @@ function renderSyncResult(friendCourses, sharedCourses, sharedTimes, unknownCoun
             <div class="sync-stat-row">
                 <div class="sync-stat"><span class="sync-stat-value">${toPersianNumber(friendCourses.length)}</span><span class="sync-stat-label">درس دوستت</span></div>
                 <div class="sync-stat shared"><span class="sync-stat-value">${toPersianNumber(sharedCourses.length)}</span><span class="sync-stat-label">مشترک</span></div>
-                <div class="sync-stat"><span class="sync-stat-value">${toPersianNumber(sharedTimes.length)}</span><span class="sync-stat-label">روز هم‌کلاسی</span></div>
+                <div class="sync-stat"><span class="sync-stat-value">${toPersianNumber(freeSlots.length)}</span><span class="sync-stat-label">روز با وقت آزاد مشترک</span></div>
             </div>
             ${unknownCount ? `<div class="sync-warn">${toPersianNumber(unknownCount)} درس از برنامه‌ی دوستت در دیتای فعلی پیدا نشد.</div>` : ''}
         </div>
@@ -3848,17 +3609,16 @@ function renderSyncResult(friendCourses, sharedCourses, sharedTimes, unknownCoun
         </div>
 
         <div class="sync-section">
-            <h4 class="sync-section-title">⏰ زمان‌های کلاس مشترک (هر دو سر کلاس هستید)</h4>
-            ${sharedTimes.length ? `
+            <h4 class="sync-section-title">🕐 وقت‌های آزاد مشترک (هر دو خالی هستید)</h4>
+            ${freeSlots.length ? `
                 <div class="sync-free-grid">
-                    ${sharedTimes.map(f => `
+                    ${freeSlots.map(f => `
                         <div class="sync-free-row">
                             <span class="sync-free-day">${escapeHtml(f.day)}</span>
                             <span class="sync-free-ranges">${f.ranges.map(r => `<span class="sync-free-range">${toPersianTime(r)}</span>`).join('')}</span>
-                            <span class="sync-free-total">${toPersianNumber(f.hours % 1 ? f.hours.toFixed(1) : f.hours)} ساعت</span>
                         </div>`).join('')}
                 </div>`
-                : '<div class="sync-empty">هیچ ساعت کلاس مشترکی ندارید — برنامه‌هاتون از هم فاصله داره</div>'}
+                : '<div class="sync-empty">هیچ بازه‌ی آزاد مشترکی پیدا نشد</div>'}
         </div>`;
     box.hidden = false;
 }
@@ -4673,9 +4433,9 @@ async function copyCostScript() {
 
 function closeAllModals() {
     document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('active'));
-    document.body.classList.remove('modal-open');
     state.currentModalCourse = null;
     state.pendingConflict = null;   // a dismissed conflict report is not a pending fix
+    if (isSearchModalOpen()) setSearchModalOpen(false);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -4683,10 +4443,8 @@ function closeAllModals() {
 // ═══════════════════════════════════════════════════════════════
 
 function updateCustomDataStatus() {
-    // Schedule-header flag (mobile): custom data active -> small warning icon
-    if (elements.customDataFlag) {
-        elements.customDataFlag.classList.toggle('hidden', !state.customActive);
-    }
+    // Top banner: default data locked while custom data is active
+    elements.customDataBanner.classList.toggle('hidden', !state.customActive);
 
     if (state.customActive) {
         elements.customDataStatus.innerHTML =
@@ -6403,37 +6161,15 @@ function loadTheme() {
 // ═══════════════════════════════════════════════════════════════
 
 function setupEventListeners() {
-    // Mobile view dock: schedule <-> courses page
-    elements.viewBtnSchedule.addEventListener('click', () => setMobileView('schedule'));
-    elements.viewBtnCourses.addEventListener('click', () => setMobileView('courses'));
-
-    // Mobile filters bottom-sheet
-    elements.btnOpenFilters.addEventListener('click', () => setFiltersModalOpen(true));
-    elements.closeFiltersModal.addEventListener('click', () => setFiltersModalOpen(false));
-    elements.filtersModal.addEventListener('click', (e) => {
-        if (e.target === elements.filtersModal) setFiltersModalOpen(false);
-    });
-    elements.btnFiltersApply.addEventListener('click', () => setFiltersModalOpen(false));
-    elements.btnFiltersClear.addEventListener('click', () => {
-        clearAllFilters();
-        syncFilterBars();
-        refreshLists();
+    // Mobile search modal
+    elements.searchTrigger.addEventListener('click', () => setSearchModalOpen(true));
+    elements.searchModalClose.addEventListener('click', () => setSearchModalOpen(false));
+    elements.searchModal.addEventListener('click', (e) => {
+        if (e.target === elements.searchModal) setSearchModalOpen(false);
     });
 
-    // Mobile custom-data info sheet (icon next to the fit button)
-    elements.customDataFlag.addEventListener('click', () => setCustomDataInfoOpen(true));
-    elements.closeCustomDataInfo.addEventListener('click', () => setCustomDataInfoOpen(false));
-    elements.btnCdiClose.addEventListener('click', () => setCustomDataInfoOpen(false));
-    elements.customDataInfoModal.addEventListener('click', (e) => {
-        if (e.target === elements.customDataInfoModal) setCustomDataInfoOpen(false);
-    });
-    elements.btnCdiRestoreDefault.addEventListener('click', () => {
-        setCustomDataInfoOpen(false);
-        restoreDefaultData();
-    });
-
-    // Live search on the courses page (results always visible there)
-    // Debounced: typing a full word costs ONE windowed render, not one per keystroke
+    // Live search inside the modal (results list is always visible there)
+    // Debounced: typing a full word costs ONE render, not one per keystroke
     elements.searchInput.addEventListener('input', debounceFn(() => showSearchResults(false), 140));
 
     elements.searchClear.addEventListener('click', () => {
@@ -6632,15 +6368,7 @@ function setupEventListeners() {
             applyFitScale();
             window.addEventListener('resize', fitOnResize);
         } else {
-            // classList.toggle above already removed 'fit-mode', so calling
-            // exitFitMode() here would early-return on its guard and leave
-            // document.body.style.overflow = 'hidden' forever (page scroll
-            // lock). Unlock explicitly instead.
-            elements.btnFitTable.classList.remove('active');
-            elements.btnFitTable.setAttribute('aria-pressed', 'false');
-            document.body.style.overflow = '';
-            window.removeEventListener('resize', fitOnResize);
-            renderSchedule(); // back to the normal day-rows / hour-columns grid
+            exitFitMode();
         }
     };
 
@@ -6657,11 +6385,6 @@ function setupEventListeners() {
         renderScheduleTabs();
         // Cost modal switches between table and card layout per breakpoint
         if (elements.costModal.classList.contains('active')) renderCostModal();
-        // Leaving mobile always returns to the schedule view
-        if (!isMobileViewport() && activeMobileView !== 'schedule') setMobileView('schedule');
-        syncMobileHeaderVar();
-        placeStatsBar();
-        placeDockIndicator(true); // pill tracks the buttons on any width change
     };
     window.addEventListener('resize', rafThrottle(onViewportChange));
 
@@ -6676,6 +6399,9 @@ function setupEventListeners() {
     });
 
     document.getElementById('btnFitClose').addEventListener('click', exitFitMode);
+
+    // External restore-default button in the custom-data banner
+    elements.btnBannerRestoreDefault.addEventListener('click', restoreDefaultData);
 
     // Custom data modal
     elements.btnCustomData.addEventListener('click', () => {
@@ -6820,10 +6546,6 @@ function setupEventListeners() {
                 closeDockMenu();
             } else if (isFilterDrawerOpen()) {
                 setFilterDrawerOpen(false);
-            } else if (elements.filtersModal.classList.contains('active')) {
-                setFiltersModalOpen(false);
-            } else if (elements.customDataInfoModal.classList.contains('active')) {
-                setCustomDataInfoOpen(false);
             } else {
                 closeAllModals();
             }
@@ -6831,6 +6553,13 @@ function setupEventListeners() {
     });
 
     // Reset search state when the mobile modal closes
+    elements.searchModal.addEventListener('transitionend', () => {
+        if (!isSearchModalOpen()) {
+            elements.searchInput.value = '';
+            showSearchResults(true);
+        }
+    });
+
     // Combo generator
     if (typeof setupComboGenerator === 'function') {
         setupComboGenerator();
@@ -6937,8 +6666,6 @@ async function init() {
     renderPanelList();
     renderSchedule();
     renderScheduleTabs();
-    setMobileView(isMobileViewport() ? 'schedule' : 'schedule');
-    placeDockIndicator(true); // first paint: pill sits under the active tab, no slide
 
     // Build advanced filter bars (mobile search + desktop drawer)
     rebuildFilterBars();

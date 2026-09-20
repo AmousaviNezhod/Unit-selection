@@ -267,17 +267,6 @@
     font-variant-numeric: tabular-nums;
 }
 
-.sync-free-total {
-    margin-inline-start: auto; /* push to the row end */
-    padding: 2px 9px;
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--success-contrast, #052e12);
-    background-color: var(--success);
-    border-radius: 999px;
-    white-space: nowrap;
-}
-
 @media (max-width: 1023px) {
     .sync-input-row {
         flex-direction: column;
