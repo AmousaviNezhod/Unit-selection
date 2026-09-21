@@ -2260,13 +2260,22 @@ select[data-filter]:hover {
     opacity: 0.6;
 }
 
-/* Hidden native selects stay in the DOM for sync() + a11y */
+/* Hidden native selects stay in the DOM for sync() + a11y. They are
+   absolutely positioned and 1px, but a `width: 100%` on some mobile
+   UA rules + the flex-column filter bar can still let them force the page
+   wider than the viewport (horizontal scroll on tab switch), so clamp them
+   to a fixed 1px box that can never overflow. */
 .filter-slider-select {
     position: absolute;
-    width: 1px;
-    height: 1px;
+    width: 1px !important;
+    max-width: 1px !important;
+    height: 1px !important;
+    max-height: 1px !important;
+    margin: 0 !important;
+    padding: 0 !important;
     opacity: 0;
     pointer-events: none;
+    overflow: hidden;
 }
 
 /* Time panes: animate between range/exact */
@@ -2380,10 +2389,17 @@ select[data-filter]:hover {
 
     .filter-bar .filter-select-wrap select,
     .filter-bar .filter-select-wrap input,
-    .filter-bar select[data-filter] {
+    .filter-bar select[data-filter]:not(.filter-slider-select) {
         height: 40px;
         font-size: 13.5px;
     }
+
+    /* The hidden twin selects must stay hidden: the mobile filter-bar is a
+       flex column with min-height: 0, so an absolutely-positioned child
+       with width 1px is fine — but the unhidden height: 40px rule above
+       used to promote them back into flow and force the page wider than
+       the viewport (horizontal scroll on tab switch). */
+    .filter-bar .filter-slider-select { height: 1px; }
 
     /* 4) Time slider: taller touch surface + readable pills */
     .filter-bar .filter-slider {
@@ -4205,6 +4221,41 @@ select[data-filter]:hover {
         display: none !important;
     }
 
+    /* FIX: horizontal shift between tabs.
+       The schedule view is taller than the viewport → a vertical scrollbar
+       appears; the courses view locks the body (height:100dvh; overflow:
+       hidden) → the scrollbar disappears. Each appearance/disappearance
+       resizes the viewport (scrollbar gutter) and every full-width element
+       jumps sideways. Reserve the scrollbar gutter on every view so the
+       gutter never flips; combined with the per-view locks below, both
+       pages stay exactly innerWidth wide across a tab switch. */
+    html { scrollbar-gutter: stable; }
+
+    /* Schedule view: the document scrolls naturally (header sticky, footer
+       scrolls away with content — the floating dock stays above it). */
+    body:not(.view-courses):not(.view-pushing) {
+        height: auto;
+        min-height: 100dvh;
+        overflow: visible;
+    }
+    body:not(.view-courses):not(.view-pushing) > .main-container {
+        overflow: visible;
+    }
+
+    /* Courses view + tab-push transition: a viewport-filling workspace.
+       The document is locked here (this is the state that used to flip the
+       scrollbar on/off); the stable gutter keeps the width pinned anyway. */
+    body.view-courses,
+    body.view-pushing {
+        height: 100dvh;
+        overflow: hidden;
+    }
+    body.view-courses > .main-container,
+    body.view-pushing > .main-container {
+        overflow-y: auto;
+        scrollbar-gutter: stable;
+    }
+
     /* Schedule fills the remaining row height; wrapper scrolls internally */
     .schedule-section {
         min-height: 0;
@@ -5449,14 +5500,9 @@ select[data-filter]:hover {
         overflow: hidden; /* the results list scrolls inside, not the document */
     }
 
-    /* Exact viewport fit: main-container fills what the (dynamic) header
-       leaves, and the page takes all of it — no guessed pixel constants. */
-    /* Constrain the page itself: body is the flex root, so it must be
-       height-bound or every flex:1 descendant sizes to its content. */
-    body.view-courses {
-        height: 100dvh;
-        overflow: hidden;
-    }
+    /* The document lock for the courses view / push transition lives in
+       the earlier mobile block; the schedule view scrolls the document
+       naturally now (footer scrolls with content, dock stays fixed). */
 
     /* The courses view is a full-screen workspace — the footer stays on
        the schedule view only. */
@@ -5468,23 +5514,47 @@ select[data-filter]:hover {
         /* body is a column flex container; without this the flex item's
            automatic minimum (content size) overrides the height above. */
         min-height: 0;
+        flex: 1;
+        padding-top: 0;
         padding-bottom: 0;
+        gap: 0;
+        overflow: hidden;
+    }
+
+    /* FIX: stats-bar smear during the tab push.
+       The schedule view scrolls naturally (header is sticky), so its
+       flex chain is height-unbounded. While GSAP pins the section as a
+       fixed overlay it still participates in that unbounded column →
+       the section grows and the static stats bar is stretched over the
+       whole table. While the push is running, bind the view to the
+       viewport exactly like the courses view, then release onDone. */
+    body:not(.view-courses) .main-container { min-height: 0; }
+    .schedule-section .header-stats { flex: none; }
+    body.view-pushing { height: 100dvh; min-height: 0; overflow: hidden; }
+    body.view-pushing .main-container {
+        height: 100%;
+        min-height: 0;
         overflow: hidden;
     }
 
     body.view-courses .courses-page {
         flex: 1;
         height: auto;
+        min-height: 0;
     }
 
     .courses-page-bar {
         display: flex;
         gap: 8px;
         align-items: stretch;
-        padding: 10px 12px 6px;
+        padding: 4px 12px 6px;
     }
 
     .courses-page-bar .search-input-wrapper { flex: 1; min-width: 0; }
+
+    /* The "فیلترها" button re-opens the bottom sheet that now holds EVERY
+       filter; the in-page strip stays for the always-visible day picker. */
+    .courses-page-bar .filters-open-btn { display: flex; }
 
     .filters-open-btn {
         flex-shrink: 0;
@@ -5514,16 +5584,15 @@ select[data-filter]:hover {
         border-radius: 999px;
     }
 
-    /* Day strip stays on the page; the rest moved into the sheet */
-    .courses-page .filter-bar { padding: 0 12px 8px; }
-    .courses-page .filter-bar .filter-row-main .filter-toggle,
-    .courses-page .filter-bar .filter-row-main .filter-sort-seg,
-    .courses-page .filter-bar .filter-row-main .filter-clear { display: none; }
-    .courses-page .filter-bar .filter-details { display: none; }
+    /* The in-page strip shows only the week picker (always visible, one
+       tap). Every other filter lives in the bottom sheet, opened by the
+       "فیلترها" button — with no collapse toggle inside it. */
+    /* Every filter (days included) lives inside the filter sheet — the
+       in-page strip is removed from the courses page entirely. */
+    .courses-page .filter-bar { display: none; }
 
-    /* Results fill the rest of the page and scroll internally */
     .courses-page .search-results {
-        flex: 1;
+        flex: 1 1 auto;
         min-height: 0;
         display: flex;
         flex-direction: column;
@@ -5636,12 +5705,24 @@ select[data-filter]:hover {
 
 .sheet-footer .btn-primary { flex: 1; }
 
-/* The sheet filter bar: full filter UI, grouped layout */
+/* The sheet filter bar: full filter UI, grouped layout — always fully
+   expanded (no collapse toggle inside the sheet). */
 .filter-bar-sheet {
     max-height: none;
     overflow: visible;
     border-bottom: none;
+    padding: 0 4px;
 }
+/* No toggle chip in the sheet: every group is visible at once */
+.filter-bar-sheet .filter-row-main .filter-toggle { display: none; }
+.filter-bar-sheet .filter-details {
+    display: flex;
+    flex-direction: column;
+    grid-template-rows: none;
+    opacity: 1;
+    overflow: visible;
+}
+.filter-bar-sheet .filter-details > .filter-groups { overflow: visible; }
 
 /* Sheet opens like every other mobile modal: slide from bottom */
 @media (max-width: 1023px) {

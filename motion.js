@@ -158,8 +158,15 @@
                 if (opts.onDone) opts.onDone();
             }
         });
-        tl.to(out, { x: fwd ? -vw : vw, duration: 0.46, ease: 'power2.inOut' }, 0);
-        tl.to(inc, { x: 0, duration: 0.46, ease: 'power2.inOut' }, 0);
+        // Smooth, clean push: a matched-velocity slide with a slow-in/slow-out
+        // curve, plus a whisper of opacity so the swap never reads as a hard
+        // cut. The two pages move as one connected surface.
+        var D = 0.44;
+        var E = 'power2.inOut';
+        tl.set(inc, { opacity: 0 });
+        tl.to(out, { x: fwd ? -vw : vw, opacity: 0.5, duration: D, ease: E }, 0);
+        tl.to(inc, { x: 0, opacity: 1, duration: D, ease: E }, 0);
+        tl.to(out, { opacity: 0, duration: 0.18, ease: 'power1.in' }, D - 0.18);
         Motion._viewPushTl = tl;
         Motion._viewPushEls = [out, inc];
         return true;

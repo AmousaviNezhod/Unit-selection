@@ -1177,23 +1177,19 @@ function buildFilterBarHtml() {
 
     return `
         <div class="filter-row filter-row-main">
-            <button type="button" class="filter-chip filter-toggle" data-filter="toggle" title="فیلترهای پیشرفته">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
-                </svg>
-                فیلتر
-                <span class="filter-badge hidden" data-role="badge">۰</span>
-            </button>
             ${WEEK_STRIP_HTML()}
             <div class="filter-unit-seg filter-sort-seg" role="group" aria-label="مرتب‌سازی نتایج">
                 <button type="button" class="filter-seg" data-filter="sortSeg" data-value="">پیش‌فرض</button>
                 <button type="button" class="filter-seg" data-filter="sortSeg" data-value="asc">نام ↑</button>
                 <button type="button" class="filter-seg" data-filter="sortSeg" data-value="desc">نام ↓</button>
             </div>
-            <button type="button" class="filter-chip filter-clear hidden" data-filter="clear">حذف فیلترها ✕</button>
+            <button type="button" class="filter-chip filter-clear hidden" data-filter="clear">
+                حذف فیلترها
+                <span class="filter-badge hidden" data-role="badge">۰</span>
+            </button>
         </div>
 
-        <div class="filter-details" data-role="details">
+        <div class="filter-details open" data-role="details">
             ${buildFilterFieldsHtml()}
         </div>
     `;
@@ -2658,6 +2654,14 @@ function setMobileView(view) {
 
     // A fast double-switch must never leave a stale pinned overlay behind
     if (window.Motion) Motion.viewPushCancel();
+    document.body.classList.remove('view-pushing');
+
+    // While the push runs, bind the view to the viewport (see the
+    // body.view-pushing rule in style.css): an unbounded flex column lets
+    // the pinned schedule section grow and smears the static stats bar
+    // across the table during the slide.
+    const lockViewport = () => document.body.classList.add('view-pushing');
+    const unlockViewport = () => document.body.classList.remove('view-pushing');
 
     const showIncoming = () => {
         incoming.classList.remove('view-hidden');
@@ -2668,6 +2672,7 @@ function setMobileView(view) {
     const hideOutgoing = () => {
         outgoing.classList.add('view-hidden');
         if (outgoing === elements.coursesPage) outgoing.hidden = true;
+        unlockViewport();
     };
 
     const pushed = changed && mobile && window.Motion && Motion.viewPush({
@@ -2677,6 +2682,7 @@ function setMobileView(view) {
         midway: showIncoming,   // relayout happens while the screen is frozen
         onDone: hideOutgoing
     });
+    if (pushed) lockViewport();
 
     if (!pushed) {
         // Fallback (reduced motion / no GSAP / first paint): instant swap
