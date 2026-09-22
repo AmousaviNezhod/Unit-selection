@@ -205,14 +205,22 @@
     /** Soft attention pulse on the conflict modal content */
     Motion.conflictAlert = function (content) {
         if (!can() || !content) return;
-        window.gsap.fromTo(content,
-            { x: 0 },
-            {
-                keyframes: [{ x: -5 }, { x: 5 }, { x: -3 }, { x: 3 }, { x: 0 }],
-                duration: 0.36,
-                ease: 'power1.inOut',
-                clearProps: 'transform'
-            });
+        // Wait out the sheet's 300ms enter transition first: running the shake
+        // mid-entry makes GSAP capture (and freeze) the half-applied scale,
+        // stalling the modal's rise until the shake ends.
+        var delay = (window.Motion && Motion.MODAL_ENTER_MS) || 320;
+        window.gsap.delayedCall(delay / 1000, function () {
+            window.gsap.fromTo(content,
+                { x: 0 },
+                {
+                    keyframes: [{ x: -5 }, { x: 5 }, { x: -3 }, { x: 3 }, { x: 0 }],
+                    duration: 0.36,
+                    ease: 'power1.inOut',
+                    // Keyframe tweens can skip vars-level clearProps; clear on
+                    // completion too so no stale inline transform is left behind.
+                    onComplete: function () { window.gsap.set(content, { clearProps: 'transform' }); }
+                });
+        });
     };
 
     window.Motion = Motion;

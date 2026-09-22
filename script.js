@@ -457,6 +457,11 @@ const elements = {
     shareLandingModal: document.getElementById('shareLandingModal'),
     shareLandingMessage: document.getElementById('shareLandingMessage'),
     shareDestinationList: document.getElementById('shareDestinationList'),
+    shareKeepSection: document.getElementById('shareKeepSection'),
+    shareKeepTitle: document.getElementById('shareKeepTitle'),
+    shareKeepList: document.getElementById('shareKeepList'),
+    shareKeepAll: document.getElementById('shareKeepAll'),
+    shareKeepNone: document.getElementById('shareKeepNone'),
     closeShareLanding: document.getElementById('closeShareLanding'),
     btnApplyShareLanding: document.getElementById('btnApplyShareLanding'),
     btnDismissShareLanding: document.getElementById('btnDismissShareLanding'),
@@ -712,6 +717,10 @@ function findCourseById(courseId) {
         const ex = getTabExceptions(tabId).find(c => getCourseId(c) === courseId);
         if (ex) return { ...ex, isException: true };
     }
+    // Snapshots carried by a pending share link (landing modal not applied yet)
+    if (pendingShareSnapshots && pendingShareSnapshots[courseId]) {
+        return { ...pendingShareSnapshots[courseId] };
+    }
     return null;
 }
 
@@ -765,7 +774,10 @@ function loadDatasetMeta() {
 function pruneHealedExceptions(tab) {
     const ex = getTabExceptions(tab.id);
     if (!ex.length) return;
-    const healed = ex.filter(c => findCourseById(getCourseId(c)));
+    // Check the DATASET itself — findCourseById falls back to this very tab's
+    // exceptions and would otherwise mark every kept course as "healed".
+    // Degree-filtered: heal only when the row is actually visible/listable.
+    const healed = ex.filter(c => findInListCourses(getCourseId(c)));
     if (!healed.length) return;
     // Heal: real dataset rows replace the snapshot inside the tab's courses
     const healedIds = new Set(healed.map(c => getCourseId(c)));
@@ -4150,7 +4162,6 @@ function showCourseModal(course) {
  * @param {string|null} replaceId group being swapped out (swap flow only)
  */
 function showConflictModal(newCourse, conflicts, replaceId = null) {
-    if (window.Motion) Motion.conflictAlert(document.getElementById('conflictModal').querySelector('.modal-content'));
     const groups = groupConflicts(conflicts);
     const conflictIds = blockedCourseIds(conflicts);
     const newId = getCourseId(newCourse);
@@ -4172,10 +4183,11 @@ function showConflictModal(newCourse, conflicts, replaceId = null) {
         ${replaceId ? '<br>این درس جای‌گزین گروه فعلی برنامه می‌شود.' : ''}
     `;
 
+    // One column-head row per group (instead of a tag on every pair) keeps
+    // the comparison a real two-column table — even on narrow phone screens.
     elements.conflictGroups.innerHTML = groups.map(group => `
         <div class="conflict-group">
             <div class="conflict-group-head">
-                <span class="conflict-badge conflict-badge-old">از قبل در برنامه</span>
                 <span class="conflict-group-name">${escapeHtml(group.course.name)}</span>
                 <span class="conflict-group-meta">
                     گروه ${toPersianNumber(group.course.group)} | کد ${toPersianNumber(group.course.code)}
@@ -4183,33 +4195,39 @@ function showConflictModal(newCourse, conflicts, replaceId = null) {
                         ? ` | ${escapeHtml(group.course.professor)}` : ''}
                 </span>
             </div>
-            <ul class="conflict-pairs">
+            <div class="conflict-pairs">
+                <div class="conflict-pair conflict-pair-heads" aria-hidden="true">
+                    <span class="conflict-col-tag conflict-col-new">تایم درس جدید</span>
+                    <span class="conflict-col-tag conflict-col-old">تایم درس موجود</span>
+                </div>
                 ${group.pairs.map(pair => `
-                    <li class="conflict-pair">
+                    <div class="conflict-pair">
                         <div class="conflict-slot conflict-slot-new">
-                            <span class="conflict-slot-tag">درس جدید</span>
                             <span class="conflict-slot-time">${escapeHtml(formatSlotLabel(pair.newSlot))}</span>
+                            <span class="conflict-slot-x" aria-hidden="true">✕ هم‌زمان</span>
                         </div>
-                        <span class="conflict-pair-x">✕</span>
                         <div class="conflict-slot conflict-slot-old">
-                            <span class="conflict-slot-tag">در برنامه</span>
                             <span class="conflict-slot-time">${escapeHtml(formatSlotLabel(pair.oldSlot))}</span>
                         </div>
-                    </li>`).join('')}
-            </ul>
+                    </div>`).join('')}
+            </div>
         </div>`).join('');
 
     const swapping = !!replaceId;
     const action = conflictIds.length
-        ? `${swapping ? '⇄ حذف' : '🗑 حذف'} ${toPersianNumber(conflictIds.length)} درس متداخل و ${swapping ? 'جابجایی' : 'افزودن'} "${escapeHtml(newCourse.name)}"`
-        : `${swapping ? '⇄ جابجایی' : 'افزودن'} "${escapeHtml(newCourse.name)}"`;
+        ? `${swapping ? 'جابجایی و حذف' : 'حذف'} ${toPersianNumber(conflictIds.length)} درس متداخل`
+        : (swapping ? 'جابجایی گروه' : 'افزودن درس');
     elements.btnForceAddConflict.textContent = action;
 
     elements.conflictNote.textContent = conflictIds.length
-        ? `با زدن دکمه زیر، ${toPersianNumber(conflictIds.length)} درس متداخل از برنامه حذف و "${newCourse.name}" اضافه می‌شود. این کار یک مرحله حساب می‌شود و با «برگشت» کامل برمی‌گردد.`
-        : `با زدن دکمه زیر، "${newCourse.name}" وارد برنامه می‌شود.`;
+        ? `${toPersianNumber(conflictIds.length)} درس متداخل حذف و "${newCourse.name}" اضافه می‌شود. یک مرحله حساب می‌شود و با «برگشت» کامل برمی‌گردد.`
+        : `"${newCourse.name}" وارد برنامه می‌شود.`;
 
     elements.conflictModal.classList.add('active');
+    // Shake AFTER the sheet is active: running it earlier made GSAP capture the
+    // base off-screen transform (translateY(32px)) and pin it inline, pushing
+    // the footer 32px below the viewport on mobile.
+    if (window.Motion) Motion.conflictAlert(elements.conflictModal.querySelector('.modal-content'));
 }
 
 /**
@@ -4831,12 +4849,12 @@ function openDatasetReportModal(entries) {
                 const optionsHtml = item.options.length
                     ? `<div class="dr-options">` +
                       `<label class="dr-option dr-option-keep">
-                          <input type="radio" name="dr-${myIdx}" value="__keep__" ${item.options.length ? '' : 'checked'}>
+                          <input type="radio" name="dr-${myIdx}" value="__keep__" checked>
                           <span class="dr-option-main">استثنا نگه‌دار — همان گروه قبلی بماند (با دیتای قبلی)</span>
                       </label>` +
                       item.options.map((opt, oi) => `
                       <label class="dr-option">
-                          <input type="radio" name="dr-${myIdx}" value="${escapeHtml(opt.id)}" ${oi === 0 && !item.options.length ? 'checked' : ''}>
+                          <input type="radio" name="dr-${myIdx}" value="${escapeHtml(opt.id)}">
                           <span class="dr-option-main">
                               <b>گروه ${toPersianNumber(opt.group)}</b> — ${escapeHtml(opt.professor)} · ${formatUnits(opt.units)} واحد
                           </span>
@@ -5191,10 +5209,33 @@ async function copyToClipboard() {
 // SHARE VIA LINK (URL hash)
 // ═══════════════════════════════════════════════════════════════
 
-/** Encode selected course IDs (+ this tab's validation overrides) into the URL hash */
+/** Compact course snapshot for a share link (drops local-only fields like color)
+ *  so the receiver can KEEP courses that are missing from its own data. */
+function shareSnapshot(course) {
+    return {
+        code: course.code,
+        group: course.group,
+        name: course.name,
+        units: course.units,
+        professor: course.professor,
+        capacity: course.capacity,
+        registered: course.registered,
+        degree: course.degree || '',
+        schedule: course.schedule.map(sl => ({ ...sl }))
+    };
+}
+
+/** Encode selected course IDs (+ snapshots + this tab's validation overrides) into the URL hash */
 function buildShareLink() {
+    // Snapshots ride along so the receiver can KEEP courses its data lacks
+    const d = {};
+    state.selectedCourses.forEach(id => {
+        const course = findCourseById(id);
+        if (course) d[id] = shareSnapshot(course);
+    });
     const payload = JSON.stringify({
         c: state.selectedCourses,
+        d,
         v: getValidationOverrides() // rule switches ride along the link
     });
     const encoded = btoa(unescape(encodeURIComponent(payload))); // UTF-8 safe base64
@@ -5221,6 +5262,9 @@ async function shareSchedule() {
 
 /** Parsed ids (+ validation overrides) from a share link kept for the landing modal */
 let pendingShareIds = null;
+/** Course snapshots (id -> course) carried by the link for ids the local data
+ *  lacks — offered as "keep as exception" in the landing modal (default: keep) */
+let pendingShareSnapshots = null;
 
 /** Restore selections from a share link's #hash (returns true when applied) */
 function restoreFromHash() {
@@ -5233,10 +5277,32 @@ function restoreFromHash() {
         const all = [...state.defaultCourses, ...state.customCourses];
         const known = new Set(all.map(c => getCourseId(c)));
         const valid = ids.filter(id => known.has(id));
-        state.pendingShareInvalidIds = ids.filter(id => !known.has(id));
-        if (!valid.length) return false;
+        // Newer links carry course snapshots (d): ids the local data doesn't have
+        // become keepable (ask the user, default = keep) instead of being dropped.
+        pendingShareSnapshots = {};
+        const snaps = payload.d && typeof payload.d === 'object' ? payload.d : {};
+        ids.forEach(id => {
+            if (known.has(id)) return;
+            const snap = snaps[id];
+            if (snap && typeof snap === 'object' &&
+                typeof snap.code === 'string' && typeof snap.group === 'string' &&
+                typeof snap.name === 'string' && snap.name &&
+                getCourseId(snap) === id) {
+                pendingShareSnapshots[id] = {
+                    ...snap,
+                    schedule: (Array.isArray(snap.schedule) ? snap.schedule : [])
+                        .filter(s => s && typeof s === 'object' && s.day && s.start && s.end)
+                };
+            }
+        });
+        // Ids with neither a local row nor a snapshot cannot be shown at all
+        state.pendingShareInvalidIds = ids.filter(id => !known.has(id) && !pendingShareSnapshots[id]);
 
-        pendingShareIds = valid;
+        pendingShareIds = valid.concat(Object.keys(pendingShareSnapshots));
+        if (!pendingShareIds.length) {
+            pendingShareSnapshots = null;
+            return false;
+        }
         // Validation switches shared with the link (only the rules the sender turned OFF)
         if (payload.v && typeof payload.v === 'object') {
             const off = {};
@@ -5263,10 +5329,44 @@ function openShareLanding() {
     const sharedCount = pendingShareIds.length;
     const canCreateNew = state.schedules.length < CONFIG.MAX_SCHEDULES;
     const invalidCount = (state.pendingShareInvalidIds || []).length;
+    const keepCount = pendingShareSnapshots ? Object.keys(pendingShareSnapshots).length : 0;
 
-    elements.shareLandingMessage.innerHTML =
-        `این لینک شامل <strong>${toPersianNumber(sharedCount)} درس</strong> است${invalidCount
-            ? ` — <span class="share-invalid-warn">${toPersianNumber(invalidCount)} درس در دیتای فعلی پیدا نشد و کنار گذاشته می‌شود</span>` : ''}. بریز داخل کدام برنامه؟`;
+    let msg =
+        `این لینک شامل <strong>${toPersianNumber(sharedCount)} درس</strong> است`;
+    if (keepCount) {
+        msg += ` — <span class="share-keep-warn">${toPersianNumber(keepCount)} درس در دیتای فعلی نیست و می‌توانید نگه‌شان دارید</span>`;
+    }
+    if (invalidCount) {
+        msg += ` — <span class="share-invalid-warn">${toPersianNumber(invalidCount)} درس بدون اطلاعات کامل پیدا نشد و کنار گذاشته می‌شود</span>`;
+    }
+    msg += `. بریز داخل کدام برنامه؟`;
+    elements.shareLandingMessage.innerHTML = msg;
+
+    // Keep/drop section: courses absent from BOTH local datasets, carried by the
+    // link's snapshots. Default = keep (checked), per user preference.
+    const keepIds = pendingShareSnapshots ? Object.keys(pendingShareSnapshots) : [];
+    if (elements.shareKeepSection) {
+        if (keepIds.length) {
+            elements.shareKeepSection.hidden = false;
+            elements.shareKeepTitle.innerHTML =
+                `${toPersianNumber(keepIds.length)} درس در دیتای سایت نیست — نگه‌شان دارم؟`;
+            elements.shareKeepList.innerHTML = keepIds.map((id, i) => {
+                const snap = pendingShareSnapshots[id];
+                const sched = slotsSummaryLine(snap.schedule);
+                return `<label class="share-keep-row">
+                    <input type="checkbox" class="share-keep-check" data-keep-id="${escapeHtml(id)}" checked>
+                    <span class="share-keep-info">
+                        <span class="share-keep-name">${escapeHtml(snap.name)}</span>
+                        <span class="share-keep-meta">کد ${toPersianNumber(snap.code)} · گروه ${toPersianNumber(snap.group)} · ${formatUnits(Number(snap.units) || 0)} واحد${snap.professor ? ' · ' + escapeHtml(snap.professor) : ''}</span>
+                        <span class="share-keep-sched">${escapeHtml(sched)}</span>
+                    </span>
+                </label>`;
+            }).join('');
+        } else {
+            elements.shareKeepSection.hidden = true;
+            elements.shareKeepList.innerHTML = '';
+        }
+    }
 
     const rows = [];
     if (canCreateNew) {
@@ -5298,36 +5398,71 @@ function applyShareLanding() {
     if (!picked || !pendingShareIds) return false;
     const value = picked.value;
 
+    // Split pending ids: kept (default) vs dropped by the user's checkboxes.
+    // Kept ids that aren't in either local dataset become tab exceptions.
+    const checkedKeep = new Set();
+    if (elements.shareKeepSection && !elements.shareKeepSection.hidden) {
+        elements.shareKeepList.querySelectorAll('.share-keep-check:checked').forEach(cb => {
+            checkedKeep.add(cb.dataset.keepId);
+        });
+    }
+    const droppedKeepIds = new Set(
+        Object.keys(pendingShareSnapshots || {}).filter(id => !checkedKeep.has(id))
+    );
+    const finalIds = pendingShareIds.filter(id => !droppedKeepIds.has(id));
+    const keptSnapshots = Object.keys(pendingShareSnapshots || {})
+        .filter(id => checkedKeep.has(id))
+        .map(id => pendingShareSnapshots[id]);
+    if (!finalIds.length) {
+        showToast('همه دروس نگه‌داشته‌نشده حذف شدند — حداقل یک درس را نگه دارید', 'warning');
+        return false;
+    }
+
+    /** Merge kept out-of-dataset snapshots into a tab's exception store */
+    const storeKeptExceptions = (tabId) => {
+        if (!keptSnapshots.length) return 0;
+        const map = new Map(getTabExceptions(tabId).map(c => [getCourseId(c), c]));
+        keptSnapshots.forEach(c => map.set(getCourseId(c), snapshotCourse(c)));
+        state.datasetExceptions[tabId] = [...map.values()];
+        return keptSnapshots.length;
+    };
+
+    let keptNote = '';
     if (value === '__new__') {
         // createSchedule caps at MAX_SCHEDULES — we only offer __new__ when free
         let id = 'tab' + Date.now();
         while (state.schedules.some(t => t.id === id)) id = 'tab' + Date.now() + Math.floor(Math.random() * 100);
-        const tab = { id, name: `برنامه ${toPersianNumber(state.schedules.length + 1)}`, courses: [...pendingShareIds] };
+        const tab = { id, name: `برنامه ${toPersianNumber(state.schedules.length + 1)}`, courses: [...finalIds] };
         state.schedules.push(tab);
         syncSchedulesFromState();
         state.activeScheduleId = id;
-        state.selectedCourses = [...pendingShareIds];
-        markTabOrigins(id, pendingShareIds); // these came from a share link
+        state.selectedCourses = [...finalIds];
+        markTabOrigins(id, finalIds); // these came from a share link
         applyValidationsToTab(id, state.pendingShareValidations); // rule switches stick to the tab
-        showToast(`"${tab.name}" ساخته شد و برنامه اشتراکی داخل آن ریخته شد`, 'success');
+        const kept = storeKeptExceptions(id);
+        if (kept) keptNote = ` · ${toPersianNumber(kept)} درس خارج از دیتا نگه داشته شد`;
+        showToast(`"${tab.name}" ساخته شد و برنامه اشتراکی داخل آن ریخته شد${keptNote}`, 'success');
     } else {
         const tab = state.schedules.find(t => t.id === value);
         if (!tab) return false;
         const replaced = tab.courses.length;
         syncSchedulesFromState();
         state.activeScheduleId = tab.id;
-        state.selectedCourses = [...pendingShareIds];
-        markTabOrigins(tab.id, pendingShareIds);
+        state.selectedCourses = [...finalIds];
+        markTabOrigins(tab.id, finalIds);
         applyValidationsToTab(tab.id, state.pendingShareValidations); // rule switches stick to the tab
+        const kept = storeKeptExceptions(tab.id);
+        if (kept) keptNote = ` · ${toPersianNumber(kept)} درس خارج از دیتا نگه داشته شد`;
         showToast(
             replaced
-                ? `برنامه "${tab.name}" با ${toPersianNumber(pendingShareIds.length)} درس اشتراکی جایگزین شد`
-                : `${toPersianNumber(pendingShareIds.length)} درس داخل "${tab.name}" ریخته شد`,
+                ? `برنامه "${tab.name}" با ${toPersianNumber(finalIds.length)} درس اشتراکی جایگزین شد${keptNote}`
+                : `${toPersianNumber(finalIds.length)} درس داخل "${tab.name}" ریخته شد${keptNote}`,
             'success'
         );
     }
 
     pendingShareIds = null;
+    pendingShareSnapshots = null;
     state.pendingShareInvalidIds = [];
     state.pendingShareValidations = null;
     state.unitsWarned = false;
@@ -6755,10 +6890,12 @@ function setupEventListeners() {
     // Share-link landing
     elements.closeShareLanding.addEventListener('click', () => {
         pendingShareIds = null;
+        pendingShareSnapshots = null;
         closeAllModals();
     });
     elements.btnDismissShareLanding.addEventListener('click', () => {
         pendingShareIds = null;
+        pendingShareSnapshots = null;
         closeAllModals();
         showToast('برنامه اشتراکی نادیده گرفته شد', 'info');
     });
@@ -6778,6 +6915,13 @@ function setupEventListeners() {
     elements.landingExportPDF.addEventListener('click', () => exportPendingShare('pdf'));
     elements.landingCopyText.addEventListener('click', () => exportPendingShare('copy'));
     elements.landingExportJson.addEventListener('click', () => exportPendingShare('json'));
+    // Keep/drop section: check-all / uncheck-all shortcuts
+    elements.shareKeepAll?.addEventListener('click', () => {
+        elements.shareKeepList.querySelectorAll('.share-keep-check').forEach(cb => { cb.checked = true; });
+    });
+    elements.shareKeepNone?.addEventListener('click', () => {
+        elements.shareKeepList.querySelectorAll('.share-keep-check').forEach(cb => { cb.checked = false; });
+    });
 
     // Cost modal
     elements.closeCostModal.addEventListener('click', closeAllModals);

@@ -15,7 +15,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
     <!-- Styles -->
-    <link rel="stylesheet" href="style.css?v=20260924">
+    <link rel="stylesheet" href="style.css?v=20260925">
     <link rel="stylesheet" href="combo.css?v=20260924">
     <link rel="stylesheet" href="io.css?v=20260924">
     <link rel="stylesheet" href="validations.css?v=20260924">
@@ -865,22 +865,20 @@
                 </button>
             </div>
             <div class="modal-body conflict-body">
-                <div class="conflict-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-                        <line x1="12" y1="9" x2="12" y2="13"></line>
-                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
-                    </svg>
-                </div>
-                <p class="conflict-message" id="conflictMessage"></p>
-                <div class="conflict-legend">
-                    <span class="conflict-chip conflict-chip-new">تایم درس جدید</span>
-                    <span class="conflict-chip conflict-chip-old">تایم درس موجود در برنامه</span>
+                <div class="conflict-summary">
+                    <span class="conflict-summary-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                            <line x1="12" y1="9" x2="12" y2="13"></line>
+                            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                        </svg>
+                    </span>
+                    <p class="conflict-message" id="conflictMessage"></p>
                 </div>
                 <div class="conflict-groups" id="conflictGroups"></div>
                 <p class="conflict-note" id="conflictNote"></p>
             </div>
-            <div class="modal-footer">
+            <div class="modal-footer conflict-footer">
                 <button class="btn-danger conflict-force-btn" id="btnForceAddConflict">حذف دروس متداخل و افزودن درس جدید</button>
                 <button class="btn-secondary" id="btnCloseConflictModal">انصراف</button>
             </div>
@@ -983,7 +981,7 @@
 
     <!-- Share-Link Landing ( poured into a tab the user picks ) -->
     <div class="modal-overlay" id="shareLandingModal">
-        <div class="modal-content modal-small">
+        <div class="modal-content modal-large">
             <div class="modal-header">
                 <h3 class="modal-title">برنامه اشتراکی</h3>
                 <button class="modal-close" id="closeShareLanding">
@@ -995,6 +993,21 @@
             </div>
             <div class="modal-body">
                 <p class="conflict-message" id="shareLandingMessage"></p>
+
+                <!-- Courses the local data doesn't have (carried by the link):
+                     keep them as exceptions (default ON) or drop them -->
+                <div class="share-keep-section" id="shareKeepSection" hidden>
+                    <div class="share-keep-head">
+                        <span class="share-keep-title" id="shareKeepTitle"></span>
+                        <span class="share-keep-actions">
+                            <button type="button" class="share-keep-mini" id="shareKeepAll">همه</button>
+                            <button type="button" class="share-keep-mini" id="shareKeepNone">هیچ‌کدام</button>
+                        </span>
+                    </div>
+                    <div class="share-keep-list" id="shareKeepList"></div>
+                    <div class="share-keep-foot">موردِ تیک‌خورده به‌صورت استثنا نگه داشته می‌شود و در لیست دروس برچسب «استثنا» می‌گیرد.</div>
+                </div>
+
                 <div class="share-destination-list" id="shareDestinationList"></div>
                 <div class="freshness-hint">
                     اگر همه برنامه‌ها پر باشند، می‌توانید یکی را برای جایگزینی انتخاب کنید — یا همین‌جا خروجی بگیرید.
@@ -1342,8 +1355,8 @@
     <!-- ==================== SCRIPTS ==================== -->
     <!-- GSAP: presentation-layer motion only (never business logic) -->
     <script defer src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
-    <script defer src="motion.js?v=20260923"></script>
+    <script defer src="motion.js?v=20260926"></script>
     <script src="combo.js?v=20260923"></script>
-    <script src="script.js?v=20260924"></script>
+    <script src="script.js?v=20260925"></script>
 </body>
 </html>
